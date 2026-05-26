@@ -1,0 +1,36 @@
+{
+  "arcGISBaseUrl": "https://your-server.domain.com/server/rest/services",
+  "serverTime": "",
+  "checkIntervalMinutes": 15,
+  "stats": {
+    "online": 0,
+    "offline": 0,
+    "slow": 0,
+    "total": 0
+  },
+  "services": [
+    {
+      "id": 1,
+      "serviceName": "My Map Service",
+      "servicePath": "MyFolder/MyService/MapServer",
+      "serviceType": "MapServer",
+      "url": "https://gis.example.com/arcgis/rest/services/MyFolder/MyService/MapServer",
+      "username": "",
+      "password": "",
+      "status": "Unknown",
+      "pingMs": null,
+      "pingHistory": [],
+      "lastChecked": null,
+      "lastError": ""
+    }
+  ],
+  "recentAlerts": [],
+  "emailConfig": {
+    "smtpServer": "smtp.example.com",
+    "smtpPort": 587,
+    "username": "monitor@example.com",
+    "password": "",
+    "fromEmail": "monitor@example.com",
+    "recipients": []
+  }
+}

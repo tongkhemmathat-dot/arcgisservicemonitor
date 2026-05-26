@@ -1,0 +1,1514 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ArcGIS Service Monitor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Kanit:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0a0e1a;
+            --panel-bg: #0f1525;
+            --panel-border: #1e2d4a;
+            --neon-blue: #00c8ff;
+            --neon-green: #00e87a;
+            --neon-red: #ff3b5c;
+            --neon-yellow: #ffc940;
+            --text-main: #c8d8f0;
+            --text-muted: #4a6080;
+            --radius: 10px;
+            --font-ui: 'Kanit', sans-serif;
+            --font-tech: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background-image: radial-gradient(circle at 50% 0%, #152036 0%, transparent 60%);
+            color: var(--text-main);
+            font-family: var(--font-ui);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* Topbar */
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(10, 14, 26, 0.85);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--panel-border);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .topbar-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .logo-icon {
+            font-size: 24px;
+            color: var(--neon-blue);
+            text-shadow: 0 0 10px rgba(0, 200, 255, 0.5);
+        }
+
+        .title-group h1 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #ffffff;
+            letter-spacing: 1px;
+            margin-bottom: 2px;
+        }
+
+        .title-group .subtitle {
+            font-size: 11px;
+            color: var(--neon-blue);
+            letter-spacing: 2px;
+            font-weight: 500;
+        }
+
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .last-update {
+            font-family: var(--font-tech);
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .live-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(0, 232, 122, 0.1);
+            border: 1px solid var(--neon-green);
+            color: var(--neon-green);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--neon-green);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--neon-green);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 232, 122, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(0, 232, 122, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 232, 122, 0); }
+        }
+
+        .btn-primary {
+            background-color: transparent;
+            color: var(--neon-blue);
+            border: 1px solid var(--neon-blue);
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-family: var(--font-ui);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background-color: rgba(0, 200, 255, 0.1);
+            box-shadow: 0 0 15px rgba(0, 200, 255, 0.3);
+        }
+
+        .btn-primary:disabled {
+            border-color: var(--text-muted);
+            color: var(--text-muted);
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        .container {
+            padding: 30px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+
+        /* Stats Row */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+        }
+
+        .stat-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: var(--radius);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+        }
+
+        .stat-card.online::before { background: var(--neon-green); box-shadow: 0 0 10px var(--neon-green); }
+        .stat-card.offline::before { background: var(--neon-red); box-shadow: 0 0 10px var(--neon-red); }
+        .stat-card.slow::before { background: var(--neon-yellow); box-shadow: 0 0 10px var(--neon-yellow); }
+        .stat-card.total::before { background: var(--neon-blue); box-shadow: 0 0 10px var(--neon-blue); }
+
+        .stat-card .label {
+            color: var(--text-muted);
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .stat-card .value {
+            font-family: var(--font-tech);
+            font-size: 36px;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .stat-card.online .value { color: var(--neon-green); }
+        .stat-card.offline .value { color: var(--neon-red); }
+        .stat-card.slow .value { color: var(--neon-yellow); }
+        .stat-card.total .value { color: var(--neon-blue); }
+
+        /* Main Content Grid */
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 20px;
+            align-items: start;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: var(--radius);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--panel-border);
+            font-weight: 500;
+            color: #fff;
+            letter-spacing: 1px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-body {
+            padding: 20px;
+            overflow-y: auto;
+            max-height: 600px;
+        }
+
+        /* Services Table Layout (Grid based for flexibility) */
+        .services-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .service-row {
+            display: grid;
+            grid-template-columns: 30px 2fr 100px 100px 1fr 100px;
+            align-items: center;
+            gap: 15px;
+            padding: 12px 15px;
+            background: rgba(30, 45, 74, 0.2);
+            border: 1px solid rgba(30, 45, 74, 0.5);
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+
+        .service-row:hover {
+            background: rgba(30, 45, 74, 0.4);
+        }
+
+        .status-dot-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .service-info {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .service-name {
+            font-weight: 500;
+            color: #fff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .service-path {
+            font-family: var(--font-tech);
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .badge {
+            display: inline-flex;
+            justify-content: center;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .badge.type {
+            background: rgba(74, 96, 128, 0.2);
+            color: var(--text-main);
+            border: 1px solid rgba(74, 96, 128, 0.5);
+        }
+
+        /* Status colors */
+        .status-Online .status-dot { background-color: var(--neon-green); box-shadow: 0 0 8px var(--neon-green); animation: pulse 2s infinite; }
+        .status-Offline .status-dot { background-color: var(--neon-red); box-shadow: 0 0 8px var(--neon-red); }
+        .status-Slow .status-dot { background-color: var(--neon-yellow); box-shadow: 0 0 8px var(--neon-yellow); }
+        .status-Unknown .status-dot { background-color: var(--text-muted); }
+
+        .badge.Online { background: rgba(0, 232, 122, 0.1); color: var(--neon-green); border: 1px solid rgba(0, 232, 122, 0.3); }
+        .badge.Offline { background: rgba(255, 59, 92, 0.1); color: var(--neon-red); border: 1px solid rgba(255, 59, 92, 0.3); }
+        .badge.Slow { background: rgba(255, 201, 64, 0.1); color: var(--neon-yellow); border: 1px solid rgba(255, 201, 64, 0.3); }
+        .badge.Unknown { background: rgba(74, 96, 128, 0.1); color: var(--text-muted); border: 1px solid rgba(74, 96, 128, 0.3); }
+
+        .ping-container {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .ping-val {
+            font-family: var(--font-tech);
+            font-size: 12px;
+        }
+
+        .progress-bg {
+            height: 4px;
+            background: rgba(74, 96, 128, 0.3);
+            border-radius: 2px;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        .progress-bar {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+
+        .sparkline {
+            display: flex;
+            align-items: flex-end;
+            height: 12px;
+            gap: 1px;
+            margin-top: 2px;
+        }
+
+        .spark-bar {
+            flex: 1;
+            min-height: 1px;
+            transition: height 0.4s ease, background-color 0.4s ease;
+        }
+
+        .last-checked {
+            font-family: var(--font-tech);
+            font-size: 11px;
+            color: var(--text-muted);
+            text-align: right;
+        }
+
+        .service-error {
+            font-family: var(--font-tech);
+            font-size: 10px;
+            color: var(--neon-red);
+            opacity: 0.85;
+            margin-top: 3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Alerts List */
+        .alerts-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .alert-item {
+            background: rgba(30, 45, 74, 0.2);
+            border-radius: 4px;
+            padding: 12px;
+            border-left: 3px solid transparent;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .alert-item.Recovery { border-left-color: var(--neon-green); }
+        .alert-item.Critical { border-left-color: var(--neon-red); }
+        .alert-item.Warning { border-left-color: var(--neon-yellow); }
+        .alert-item.Info { border-left-color: var(--neon-blue); }
+
+        .alert-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .alert-time {
+            font-family: var(--font-tech);
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+
+        .alert-service {
+            font-size: 12px;
+            font-weight: 500;
+            color: #fff;
+        }
+
+        .alert-message {
+            font-size: 12px;
+            color: var(--text-main);
+            line-height: 1.4;
+        }
+
+        /* Empty States */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+            text-align: center;
+            gap: 15px;
+        }
+
+        .empty-state .icon {
+            font-size: 32px;
+            opacity: 0.5;
+        }
+
+        /* Toast Notifications */
+        #toast-container {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 9999;
+        }
+
+        .toast {
+            background: var(--panel-bg);
+            border: 1px solid var(--neon-green);
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 4px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5), 0 0 10px rgba(0, 232, 122, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            animation: slideIn 0.3s ease forwards;
+        }
+
+        .toast.error {
+            border-color: var(--neon-red);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5), 0 0 10px rgba(255, 59, 92, 0.2);
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; transform: translateY(-10px); }
+        }
+
+        .spin {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* Settings Button */
+        .btn-settings {
+            background-color: transparent;
+            color: var(--neon-yellow);
+            border: 1px solid var(--neon-yellow);
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-family: var(--font-ui);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-settings:hover {
+            background-color: rgba(255, 201, 64, 0.1);
+            box-shadow: 0 0 15px rgba(255, 201, 64, 0.3);
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: var(--radius);
+            padding: 30px;
+            max-height: 80vh;
+            width: 90%;
+            max-width: 600px;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h2 {
+            color: #fff;
+            font-size: 18px;
+            margin: 0;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+        }
+
+        .close-btn:hover {
+            color: var(--neon-yellow);
+        }
+
+        /* Tabs */
+        .modal-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--panel-border);
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            padding: 10px 15px;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn.active {
+            color: var(--neon-blue);
+            border-bottom-color: var(--neon-blue);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Form Styles */
+        .form-group {
+            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .form-label {
+            color: var(--text-main);
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .form-input {
+            background: rgba(30, 45, 74, 0.3);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 10px 12px;
+            border-radius: 4px;
+            font-family: var(--font-ui);
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--neon-blue);
+            background: rgba(0, 200, 255, 0.05);
+            box-shadow: 0 0 10px rgba(0, 200, 255, 0.1);
+        }
+
+        .form-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* Service List in Modal */
+        .service-item {
+            background: rgba(30, 45, 74, 0.2);
+            border: 1px solid var(--panel-border);
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .service-item-info {
+            flex: 1;
+        }
+
+        .service-item-name {
+            color: var(--neon-blue);
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .service-item-url {
+            color: var(--text-muted);
+            font-size: 12px;
+            font-family: var(--font-tech);
+        }
+
+        .service-item-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-small {
+            background: rgba(255, 59, 92, 0.1);
+            border: 1px solid rgba(255, 59, 92, 0.3);
+            color: var(--neon-red);
+            padding: 4px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-small:hover {
+            background: rgba(255, 59, 92, 0.2);
+            box-shadow: 0 0 8px rgba(255, 59, 92, 0.3);
+        }
+
+        .btn-submit {
+            background-color: var(--neon-green);
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .btn-submit:hover {
+            box-shadow: 0 0 15px rgba(0, 232, 122, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .btn-submit:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+
+    <header class="topbar">
+        <div class="topbar-left">
+            <div class="logo-icon">⬢</div>
+            <div class="title-group">
+                <h1>ArcGIS Service Monitor</h1>
+                <div class="subtitle">ENTERPRISE MAP SERVICE HEALTH DASHBOARD</div>
+            </div>
+        </div>
+        <div class="topbar-right">
+            <div class="last-update" id="last-update-time">--:--:--</div>
+            <div class="last-update" id="next-check-display" style="color: var(--neon-blue); opacity: 0.7;">--</div>
+            <div class="live-pill">
+                <div class="live-dot"></div>
+                LIVE
+            </div>
+            <button class="btn-settings" id="settings-btn" onclick="openSettingsModal()">
+                <span>⚙️</span> Settings
+            </button>
+            <button class="btn-primary" id="check-btn" onclick="triggerManualCheck()">
+                <span class="btn-icon">🔄</span> ตรวจสอบเดี๋ยวนี้
+            </button>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Stats Row -->
+        <div class="stats-row">
+            <div class="stat-card online">
+                <div class="label">Online Services</div>
+                <div class="value" id="stat-online">-</div>
+            </div>
+            <div class="stat-card offline">
+                <div class="label">Offline / Error</div>
+                <div class="value" id="stat-offline">-</div>
+            </div>
+            <div class="stat-card slow">
+                <div class="label">Slow Response</div>
+                <div class="value" id="stat-slow">-</div>
+            </div>
+            <div class="stat-card total">
+                <div class="label">Total Monitored</div>
+                <div class="value" id="stat-total">-</div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Area: Services -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span>MAP SERVICES</span>
+                </div>
+                <div class="panel-body" id="services-container">
+                    <div class="empty-state">
+                        <div class="icon">⌛</div>
+                        <div>กำลังโหลดข้อมูล...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Area: Alerts -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span>RECENT ALERTS</span>
+                </div>
+                <div class="panel-body" id="alerts-container">
+                    <div class="empty-state">
+                        <div class="icon">🔕</div>
+                        <div>ยังไม่มีการแจ้งเตือน</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>⚙️ Settings</h2>
+                <button class="close-btn" onclick="closeSettingsModal()">&times;</button>
+            </div>
+
+            <div class="modal-tabs">
+                <button class="tab-btn active" onclick="switchTab('map-services')">Map Services</button>
+                <button class="tab-btn" onclick="switchTab('email-config')">Email</button>
+                <button class="tab-btn" onclick="switchTab('monitor-settings')">Monitor</button>
+            </div>
+
+            <!-- Map Services Tab -->
+            <div id="map-services" class="tab-content active">
+                <div>
+                    <h3 style="color: var(--neon-blue); margin-bottom: 15px; font-size: 14px;">Add New Map Service</h3>
+
+                    <div class="form-group">
+                        <label class="form-label">Service Name</label>
+                        <input type="text" id="mapServiceName" class="form-input" placeholder="e.g., Main Map Service" />
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Service URL</label>
+                        <input type="url" id="mapServiceUrl" class="form-input" placeholder="e.g., https://gis.example.com/rest/services/..." />
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Service Type</label>
+                        <select id="mapServiceType" class="form-input" style="cursor: pointer;">
+                            <option value="MapServer">MapServer</option>
+                            <option value="FeatureServer">FeatureServer</option>
+                            <option value="ImageServer">ImageServer</option>
+                            <option value="GeocodeServer">GeocodeServer</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Username</label>
+                        <input type="text" id="mapServiceUsername" class="form-input" placeholder="Username (optional)" />
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Password</label>
+                        <input type="password" id="mapServicePassword" class="form-input" placeholder="Password (optional)" />
+                    </div>
+
+                    <button class="btn-submit" id="service-submit-btn" onclick="addMapService()">➕ Add Service</button>
+                    <button class="btn-submit" id="service-cancel-btn" onclick="cancelEditService()" style="display:none; background: transparent; color: var(--neon-yellow); border: 1px solid var(--neon-yellow); margin-top: 8px;">✕ Cancel Edit</button>
+
+                    <h3 style="color: var(--neon-blue); margin-top: 25px; margin-bottom: 15px; font-size: 14px;">Configured Services</h3>
+                    <div id="servicesList"></div>
+                </div>
+            </div>
+
+            <!-- Email Configuration Tab -->
+            <div id="email-config" class="tab-content">
+                <div>
+                    <h3 style="color: var(--neon-blue); margin-bottom: 15px; font-size: 14px;">Email Server Configuration</h3>
+
+                    <div class="form-group">
+                        <label class="form-label">SMTP Server</label>
+                        <input type="text" id="smtpServer" class="form-input" placeholder="e.g., smtp.gmail.com" />
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">SMTP Port</label>
+                        <input type="number" id="smtpPort" class="form-input" placeholder="587 (TLS) or 465 (SSL)" value="587" />
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Email Username</label>
+                        <input type="email" id="emailUsername" class="form-input" placeholder="e.g., your-email@gmail.com" />
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Email Password</label>
+                        <input type="password" id="emailPassword" class="form-input" placeholder="Your email password or app password" />
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">From Email Address</label>
+                        <input type="email" id="fromEmail" class="form-input" placeholder="e.g., alerts@company.com" />
+                    </div>
+
+                    <h3 style="color: var(--neon-blue); margin-top: 20px; margin-bottom: 15px; font-size: 14px;">Alert Recipients</h3>
+
+                    <div class="form-group">
+                        <label class="form-label">Add Recipient Email</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="email" id="recipientEmail" class="form-input" placeholder="e.g., admin@company.com" style="flex: 1;" />
+                            <button class="btn-submit" onclick="addRecipient()" style="width: auto; margin: 0; padding: 10px 15px;">+</button>
+                        </div>
+                    </div>
+
+                    <div id="recipientsList" style="margin-bottom: 20px;"></div>
+
+                    <button class="btn-submit" onclick="saveEmailConfig()">💾 Save Email Configuration</button>
+                    <button class="btn-submit" id="test-email-btn" onclick="testEmailConfig()"
+                            style="background:transparent; color:var(--neon-blue); border:1px solid var(--neon-blue); margin-top:8px;">
+                        🧪 ทดสอบส่งอีเมล
+                    </button>
+                    <div id="emailTestResult" style="display:none; margin-top:12px; padding:12px 14px; border-radius:6px; border:1px solid; font-family:var(--font-tech); font-size:13px; line-height:1.6;"></div>
+                </div>
+            </div>
+
+            <!-- Monitor Settings Tab -->
+            <div id="monitor-settings" class="tab-content">
+                <div>
+                    <h3 style="color: var(--neon-blue); margin-bottom: 15px; font-size: 14px;">Auto-Check Interval</h3>
+                    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px; line-height: 1.6;">
+                        กำหนดความถี่ในการตรวจสอบ service อัตโนมัติ<br>
+                        การเปลี่ยนแปลงจะมีผลในรอบถัดไปโดยไม่ต้องรีสตาร์ท
+                    </p>
+
+                    <div class="form-group">
+                        <label class="form-label">ตรวจสอบทุกๆ</label>
+                        <select id="intervalPreset" class="form-input" onchange="onIntervalPresetChange()" style="cursor: pointer;">
+                            <option value="1">1 นาที (ทดสอบ)</option>
+                            <option value="5">5 นาที</option>
+                            <option value="10">10 นาที</option>
+                            <option value="15">15 นาที (ค่าเริ่มต้น)</option>
+                            <option value="30">30 นาที</option>
+                            <option value="60">1 ชั่วโมง</option>
+                            <option value="custom">กำหนดเอง...</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="customIntervalGroup" style="display: none;">
+                        <label class="form-label">จำนวนนาที (1–1440)</label>
+                        <input type="number" id="customIntervalMinutes" class="form-input"
+                               min="1" max="1440" value="15"
+                               placeholder="e.g. 20" />
+                    </div>
+
+                    <div style="background: rgba(0,200,255,0.05); border: 1px solid rgba(0,200,255,0.15); border-radius: 6px; padding: 12px 16px; margin-bottom: 20px;">
+                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">CURRENT INTERVAL</div>
+                        <div id="currentIntervalDisplay" style="font-family: var(--font-tech); font-size: 22px; color: var(--neon-blue);">-- นาที</div>
+                    </div>
+
+                    <button class="btn-submit" onclick="saveMonitorSettings()">💾 บันทึกการตั้งค่า</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // When served via IIS use relative path (proxied); when opened as file use localhost directly
+        const API = location.protocol === 'file:' ? 'http://localhost:8000' : '';
+        let refreshInterval;
+        let currentEditId = null;
+        const liveHistory = {};   // {serviceId: [pingMs, ...]} — in-memory only
+        const LIVE_MAX = 30;      // keep last 30 live points
+        let emailRecipients = [];
+
+        // --- Core Fetch Logic ---
+        async function fetchDashboardData() {
+            try {
+                const response = await fetch(`${API}/api/monitor/dashboard`);
+                if (!response.ok) throw new Error("Network response was not ok");
+                const data = await response.json();
+                updateUI(data);
+                const now = new Date();
+                document.getElementById('last-update-time').innerText =
+                    now.toLocaleTimeString('en-US', { hour12: false }) + '.' +
+                    now.getMilliseconds().toString().padStart(3, '0');
+            } catch (error) {
+                console.error("Dashboard fetch error:", error);
+            }
+        }
+
+        async function triggerManualCheck() {
+            const btn = document.getElementById('check-btn');
+            btn.disabled = true;
+            btn.innerHTML = `<span class="btn-icon spin">&#x1F504;</span> กำลังตรวจสอบ...`;
+            try {
+                const response = await fetch(`${API}/api/monitor/check`, { method: 'POST' });
+                if (!response.ok) throw new Error("Check failed");
+                showToast("System check triggered successfully", "success");
+                setTimeout(fetchDashboardData, 1500);
+            } catch (error) {
+                showToast("Failed to trigger check. Backend unreachable.", "error");
+            } finally {
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = `<span class="btn-icon">&#x1F504;</span> ตรวจสอบเดี๋ยวนี้`;
+                }, 1000);
+            }
+        }
+
+        // --- Next-check countdown ---
+        let nextCheckEpoch = null;
+
+        function updateNextCheckDisplay() {
+            const el = document.getElementById('next-check-display');
+            if (!el || !nextCheckEpoch) return;
+            const diff = Math.max(0, Math.floor((nextCheckEpoch - Date.now()) / 1000));
+            if (diff === 0) { el.textContent = 'Checking...'; return; }
+            const m = Math.floor(diff / 60);
+            const s = diff % 60;
+            el.textContent = `Next: ${m}m ${s.toString().padStart(2, '0')}s`;
+        }
+
+        // --- UI Rendering ---
+        function updateUI(data) {
+            renderStats(data.stats);
+            renderServices(data.services);
+            renderAlerts(data.recentAlerts);
+            // Set next check countdown from serverTime + interval
+            const intervalMs = (data.checkIntervalMinutes || 15) * 60 * 1000;
+            const base = data.serverTime ? new Date(data.serverTime).getTime() : Date.now();
+            nextCheckEpoch = base + intervalMs;
+            updateNextCheckDisplay();
+        }
+
+        function renderStats(stats) {
+            if (!stats) return;
+            document.getElementById('stat-online').innerText = stats.online;
+            document.getElementById('stat-offline').innerText = stats.offline;
+            document.getElementById('stat-slow').innerText = stats.slow;
+            document.getElementById('stat-total').innerText = stats.total;
+        }
+
+        function renderServices(services) {
+            const container = document.getElementById('services-container');
+            if (!services || services.length === 0) {
+                container.innerHTML = `<div class="empty-state"><div class="icon">&#x231B;</div><div>ยังไม่มีข้อมูล — เพิ่ม service ใน Settings</div></div>`;
+                return;
+            }
+            let html = '<div class="services-list">';
+            services.forEach(svc => {
+                const status = svc.status || 'Unknown';
+                const ping = svc.pingMs !== null ? svc.pingMs : 0;
+                const pingDisplay = svc.pingMs !== null ? `${ping}ms` : '-';
+                const progressPct = Math.min(100, Math.max(0, (ping / 3000) * 100));
+                let progressColor = 'var(--neon-green)';
+                if (status === 'Offline') progressColor = 'var(--neon-red)';
+                else if (status === 'Slow') progressColor = 'var(--neon-yellow)';
+                // Use live history if available, else fall back to saved history
+                const history = liveHistory[svc.id] || svc.pingHistory || [];
+                let sparklineHtml = '';
+                if (history.length > 0) {
+                    const posValues = history.filter(p => p > 0);
+                    const maxPing = posValues.length ? Math.max(...posValues, 100) : 1000;
+                    sparklineHtml = '<div class="sparkline">';
+                    history.forEach((p, idx) => {
+                        const val = p === null ? 0 : p;
+                        const isOffline = val === 0;
+                        const isLast = idx === history.length - 1;
+                        const heightPct = isOffline ? 15 : Math.min(100, Math.max(10, (val / maxPing) * 100));
+                        const sColor = isOffline
+                            ? 'rgba(255,59,92,0.45)'
+                            : val > 3000 ? 'var(--neon-yellow)'
+                            : isLast ? 'var(--neon-green)'
+                            : 'var(--neon-blue)';
+                        const opacity = isOffline ? '0.6' : isLast ? '1' : '0.75';
+                        sparklineHtml += `<div class="spark-bar" style="height:${heightPct}%;background-color:${sColor};opacity:${opacity};" title="${isOffline ? 'Offline' : val + 'ms'}"></div>`;
+                    });
+                    sparklineHtml += '</div>';
+                }
+                const timeStr = svc.lastChecked ? new Date(svc.lastChecked).toLocaleTimeString('en-US', { hour12: false }) : '--:--:--';
+                html += `
+                    <div class="service-row status-${status}">
+                        <div class="status-dot-container"><div class="status-dot"></div></div>
+                        <div class="service-info">
+                            <div class="service-name" title="${svc.serviceName}">${svc.serviceName}</div>
+                            <div class="service-path" title="${svc.servicePath}">${svc.servicePath || 'N/A'}</div>
+                            ${status === 'Offline' && svc.lastError ? `<div class="service-error" title="${svc.lastError}">&#x26A0; ${svc.lastError}</div>` : ''}
+                        </div>
+                        <div><span class="badge type">${svc.serviceType}</span></div>
+                        <div><span class="badge ${status}">${status}</span></div>
+                        <div class="ping-container">
+                            <div class="ping-val" style="color: ${progressColor}">${pingDisplay}</div>
+                            <div class="progress-bg"><div class="progress-bar" style="width: ${progressPct}%; background-color: ${progressColor}"></div></div>
+                            ${sparklineHtml}
+                        </div>
+                        <div class="last-checked">${timeStr}</div>
+                    </div>`;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function renderAlerts(alerts) {
+            const container = document.getElementById('alerts-container');
+            if (!alerts || alerts.length === 0) {
+                container.innerHTML = `<div class="empty-state"><div class="icon">&#x1F515;</div><div>ยังไม่มีการแจ้งเตือน</div></div>`;
+                return;
+            }
+            const reversedAlerts = [...alerts].reverse();
+            let html = '<div class="alerts-list">';
+            reversedAlerts.forEach(alert => {
+                const level = alert.level || 'Info';
+                const timeStr = new Date(alert.timestamp).toLocaleTimeString('en-US', { hour12: false });
+                const dateStr = new Date(alert.timestamp).toLocaleDateString();
+                let badgeClass = 'Info';
+                if (level === 'Recovery') badgeClass = 'Online';
+                if (level === 'Critical') badgeClass = 'Offline';
+                if (level === 'Warning') badgeClass = 'Slow';
+                html += `
+                    <div class="alert-item ${level}">
+                        <div class="alert-header">
+                            <span class="badge ${badgeClass}">${level}</span>
+                            <span class="alert-time">${dateStr} ${timeStr}</span>
+                        </div>
+                        <div class="alert-service">${alert.serviceName}</div>
+                        <div class="alert-message">${alert.message}</div>
+                    </div>`;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        // --- Toast System ---
+        function showToast(message, type = "success") {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `<strong>${type === 'success' ? '&#x2713;' : '&#x26A0;&#xFE0F;'}</strong> <span>${message}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.animation = 'fadeOut 0.3s ease forwards';
+                setTimeout(() => { if (toast.parentNode) container.removeChild(toast); }, 300);
+            }, 3000);
+        }
+
+        // --- Settings Modal ---
+        function openSettingsModal() {
+            document.getElementById('settingsModal').classList.add('active');
+            loadSettings();
+        }
+
+        function closeSettingsModal() {
+            document.getElementById('settingsModal').classList.remove('active');
+            cancelEditService();
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        function loadSettings() {
+            loadMapServices();
+            loadEmailConfig();
+            loadMonitorSettings();
+        }
+
+        // --- Map Services (backend-driven) ---
+        async function loadMapServices() {
+            const container = document.getElementById('servicesList');
+            container.innerHTML = '<div style="color: var(--text-muted); padding: 10px;">Loading...</div>';
+            try {
+                const response = await fetch(`${API}/api/monitor/dashboard`);
+                const data = await response.json();
+                renderServicesList(data.services || []);
+            } catch (e) {
+                container.innerHTML = '<div style="color: var(--neon-red); padding: 10px;">Cannot connect to backend</div>';
+            }
+        }
+
+        function renderServicesList(services) {
+            const container = document.getElementById('servicesList');
+            if (services.length === 0) {
+                container.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 20px;">No services added yet</div>';
+                return;
+            }
+            let html = '';
+            services.forEach(svc => {
+                html += `
+                    <div class="service-item">
+                        <div class="service-item-info">
+                            <div class="service-item-name">${svc.serviceName}</div>
+                            <div class="service-item-url">${svc.url}</div>
+                            <div style="color: var(--text-muted); font-size: 11px; margin-top: 4px;">Type: ${svc.serviceType} &nbsp;&middot;&nbsp; Path: ${svc.servicePath || 'N/A'}</div>
+                        </div>
+                        <div class="service-item-actions">
+                            <button class="btn-small" style="background:rgba(0,200,255,0.1);border-color:rgba(0,200,255,0.3);color:var(--neon-blue);" onclick="editMapService(${svc.id})">&#x270F;&#xFE0F;</button>
+                            <button class="btn-small" onclick="deleteMapService(${svc.id})">&#x1F5D1;&#xFE0F;</button>
+                        </div>
+                    </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        async function addMapService() {
+            const name = document.getElementById('mapServiceName').value.trim();
+            const url = document.getElementById('mapServiceUrl').value.trim();
+            const type = document.getElementById('mapServiceType').value;
+            const username = document.getElementById('mapServiceUsername').value.trim();
+            const password = document.getElementById('mapServicePassword').value.trim();
+
+            if (!name || !url) { showToast('Please enter Service Name and URL', 'error'); return; }
+            if (!url.startsWith('http')) { showToast('Please enter a valid URL starting with http', 'error'); return; }
+
+            const isEdit = currentEditId !== null;
+            const payload = { name, url, type, username, password };
+            if (isEdit) payload.id = currentEditId;
+
+            try {
+                const endpoint = isEdit ? `${API}/api/monitor/update` : `${API}/api/monitor/add`;
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                if (!result.success) throw new Error(result.error || 'API error');
+                showToast(isEdit ? `Service "${name}" updated` : `Service "${name}" added`, 'success');
+                cancelEditService();
+                await loadMapServices();
+                fetchDashboardData();
+            } catch (e) {
+                showToast(`Failed: ${e.message}`, 'error');
+            }
+        }
+
+        function cancelEditService() {
+            currentEditId = null;
+            document.getElementById('mapServiceName').value = '';
+            document.getElementById('mapServiceUrl').value = '';
+            document.getElementById('mapServiceUsername').value = '';
+            document.getElementById('mapServicePassword').value = '';
+            document.getElementById('mapServiceType').value = 'MapServer';
+            document.getElementById('service-submit-btn').textContent = 'Add Service';
+            document.getElementById('service-cancel-btn').style.display = 'none';
+        }
+
+        async function editMapService(id) {
+            try {
+                const response = await fetch(`${API}/api/monitor/dashboard`);
+                const data = await response.json();
+                const svc = (data.services || []).find(s => s.id === id);
+                if (!svc) return;
+                document.getElementById('mapServiceName').value = svc.serviceName || '';
+                document.getElementById('mapServiceUrl').value = svc.url || '';
+                document.getElementById('mapServiceType').value = svc.serviceType || 'MapServer';
+                document.getElementById('mapServiceUsername').value = svc.username || '';
+                document.getElementById('mapServicePassword').value = '';
+                currentEditId = id;
+                document.getElementById('service-submit-btn').textContent = 'Update Service';
+                document.getElementById('service-cancel-btn').style.display = 'block';
+                document.getElementById('mapServiceName').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                document.getElementById('mapServiceName').focus();
+            } catch (e) {
+                showToast('Failed to load service data', 'error');
+            }
+        }
+
+        async function deleteMapService(id) {
+            if (!confirm('Are you sure you want to delete this service?')) return;
+            try {
+                const response = await fetch(`${API}/api/monitor/delete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+                const result = await response.json();
+                if (!result.success) throw new Error(result.error || 'Delete failed');
+                showToast('Service deleted', 'success');
+                await loadMapServices();
+                fetchDashboardData();
+            } catch (e) {
+                showToast(`Failed to delete: ${e.message}`, 'error');
+            }
+        }
+
+        // --- Email Configuration (backend-driven) ---
+        async function loadEmailConfig() {
+            try {
+                const response = await fetch(`${API}/api/config/email`);
+                const cfg = await response.json();
+                document.getElementById('smtpServer').value = cfg.smtpServer || '';
+                document.getElementById('smtpPort').value = cfg.smtpPort || 587;
+                document.getElementById('emailUsername').value = cfg.username || '';
+                document.getElementById('emailPassword').value = '';
+                document.getElementById('emailPassword').placeholder = cfg.hasPassword
+                    ? '(password saved — enter new to change)'
+                    : 'Your email password or app password';
+                document.getElementById('fromEmail').value = cfg.fromEmail || '';
+                emailRecipients = cfg.recipients || [];
+                renderRecipients();
+            } catch (e) {
+                console.warn('Could not load email config:', e);
+            }
+        }
+
+        function renderRecipients() {
+            const container = document.getElementById('recipientsList');
+            if (emailRecipients.length === 0) { container.innerHTML = ''; return; }
+            let html = '';
+            emailRecipients.forEach((email, i) => {
+                html += `
+                    <div class="service-item">
+                        <div class="service-item-info">
+                            <div class="service-item-name" style="color: var(--text-main);">${email}</div>
+                        </div>
+                        <button class="btn-small" onclick="removeRecipient(${i})">&#x2715;</button>
+                    </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function addRecipient() {
+            const input = document.getElementById('recipientEmail');
+            const email = input.value.trim();
+            if (!email) { showToast('Please enter an email address', 'error'); return; }
+            if (!email.includes('@')) { showToast('Please enter a valid email', 'error'); return; }
+            if (emailRecipients.includes(email)) { showToast('Already added', 'error'); return; }
+            emailRecipients.push(email);
+            input.value = '';
+            renderRecipients();
+            showToast('Recipient added', 'success');
+        }
+
+        function removeRecipient(index) {
+            emailRecipients.splice(index, 1);
+            renderRecipients();
+            showToast('Recipient removed', 'success');
+        }
+
+        async function saveEmailConfig() {
+            const smtpServer = document.getElementById('smtpServer').value.trim();
+            const smtpPort = document.getElementById('smtpPort').value.trim();
+            const emailUsername = document.getElementById('emailUsername').value.trim();
+            const emailPassword = document.getElementById('emailPassword').value.trim();
+            const fromEmail = document.getElementById('fromEmail').value.trim();
+
+            if (!smtpServer || !emailUsername || !fromEmail) {
+                showToast('Please fill in SMTP Server, Username, and From Email', 'error');
+                return;
+            }
+
+            const payload = { smtpServer, smtpPort, emailUsername, fromEmail, recipients: emailRecipients };
+            if (emailPassword) payload.emailPassword = emailPassword;
+
+            try {
+                const response = await fetch(`${API}/api/config/email`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                if (!result.success) throw new Error(result.error || 'Save failed');
+                showToast('Email configuration saved', 'success');
+                document.getElementById('emailPassword').value = '';
+                document.getElementById('emailPassword').placeholder = '(password saved — enter new to change)';
+            } catch (e) {
+                showToast(`Failed to save: ${e.message}`, 'error');
+            }
+        }
+
+        // --- Email Test ---
+        async function testEmailConfig() {
+            const btn = document.getElementById('test-email-btn');
+            const resultBox = document.getElementById('emailTestResult');
+
+            btn.disabled = true;
+            btn.textContent = '⏳ กำลังทดสอบ...';
+            resultBox.style.display = 'none';
+
+            const payload = {
+                smtpServer:    document.getElementById('smtpServer').value.trim(),
+                smtpPort:      document.getElementById('smtpPort').value.trim(),
+                emailUsername: document.getElementById('emailUsername').value.trim(),
+                fromEmail:     document.getElementById('fromEmail').value.trim(),
+                recipients:    emailRecipients
+            };
+            const pw = document.getElementById('emailPassword').value.trim();
+            if (pw) payload.emailPassword = pw;
+
+            try {
+                const response = await fetch(`${API}/api/config/email/test`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                resultBox.style.display = 'block';
+                if (data.success) {
+                    resultBox.style.background  = 'rgba(0,232,122,0.07)';
+                    resultBox.style.borderColor = 'var(--neon-green)';
+                    resultBox.style.color       = 'var(--neon-green)';
+                    resultBox.innerHTML = `&#x2713; ${data.message}`;
+                } else {
+                    resultBox.style.background  = 'rgba(255,59,92,0.07)';
+                    resultBox.style.borderColor = 'var(--neon-red)';
+                    resultBox.style.color       = 'var(--neon-red)';
+                    resultBox.innerHTML = `&#x2717; ${data.message}`;
+                }
+            } catch (e) {
+                resultBox.style.display     = 'block';
+                resultBox.style.background  = 'rgba(255,59,92,0.07)';
+                resultBox.style.borderColor = 'var(--neon-red)';
+                resultBox.style.color       = 'var(--neon-red)';
+                resultBox.innerHTML = '&#x2717; ไม่สามารถเชื่อมต่อ backend ได้';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🧪 ทดสอบส่งอีเมล';
+            }
+        }
+
+        // --- Monitor Interval Settings ---
+        async function loadMonitorSettings() {
+            try {
+                const response = await fetch(`${API}/api/config/interval`);
+                const cfg = await response.json();
+                applyIntervalToUI(cfg.checkIntervalMinutes || 15);
+            } catch (e) {
+                console.warn('Could not load monitor settings:', e);
+            }
+        }
+
+        function applyIntervalToUI(minutes) {
+            const presets = [1, 5, 10, 15, 30, 60];
+            const select = document.getElementById('intervalPreset');
+            const customGroup = document.getElementById('customIntervalGroup');
+            const display = document.getElementById('currentIntervalDisplay');
+            if (!select) return;
+            if (presets.includes(minutes)) {
+                select.value = String(minutes);
+                if (customGroup) customGroup.style.display = 'none';
+            } else {
+                select.value = 'custom';
+                if (customGroup) customGroup.style.display = 'block';
+                const customInput = document.getElementById('customIntervalMinutes');
+                if (customInput) customInput.value = minutes;
+            }
+            if (display) {
+                const h = Math.floor(minutes / 60);
+                const m = minutes % 60;
+                display.textContent = h > 0
+                    ? `${h} ชม. ${m > 0 ? m + ' นาที' : ''}`
+                    : `${minutes} นาที`;
+            }
+        }
+
+        function onIntervalPresetChange() {
+            const val = document.getElementById('intervalPreset').value;
+            const customGroup = document.getElementById('customIntervalGroup');
+            if (customGroup) customGroup.style.display = val === 'custom' ? 'block' : 'none';
+        }
+
+        async function saveMonitorSettings() {
+            const preset = document.getElementById('intervalPreset').value;
+            let minutes;
+            if (preset === 'custom') {
+                minutes = parseInt(document.getElementById('customIntervalMinutes').value);
+            } else {
+                minutes = parseInt(preset);
+            }
+            if (!minutes || minutes < 1 || minutes > 1440) {
+                showToast('กรุณาระบุช่วงเวลา 1–1440 นาที', 'error');
+                return;
+            }
+            try {
+                const response = await fetch(`${API}/api/config/interval`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ checkIntervalMinutes: minutes })
+                });
+                const result = await response.json();
+                if (!result.success) throw new Error(result.error || 'Save failed');
+                applyIntervalToUI(minutes);
+                // Reset countdown from now
+                nextCheckEpoch = Date.now() + minutes * 60 * 1000;
+                showToast(`ตั้งค่าตรวจสอบทุก ${minutes} นาที เรียบร้อย`, 'success');
+            } catch (e) {
+                showToast(`บันทึกไม่สำเร็จ: ${e.message}`, 'error');
+            }
+        }
+
+        // --- Live Ping (updates sparkline every 10s without saving) ---
+        async function livePing() {
+            try {
+                const res = await fetch(`${API}/api/monitor/ping`);
+                if (!res.ok) return;
+                const data = await res.json();
+                if (!data.results) return;
+
+                data.results.forEach(r => {
+                    if (!liveHistory[r.id]) liveHistory[r.id] = [];
+                    liveHistory[r.id].push(r.pingMs !== null ? r.pingMs : 0);
+                    if (liveHistory[r.id].length > LIVE_MAX) liveHistory[r.id].shift();
+
+                    // Update pingMs display on dashboardData so stat cards stay current
+                    if (dashboardData) {
+                        const svc = (dashboardData.services || []).find(s => s.id === r.id);
+                        if (svc) { svc.pingMs = r.pingMs; svc.status = r.status; }
+                    }
+                });
+
+                if (dashboardData) renderServices(dashboardData.services);
+            } catch (e) { /* silent — backend may not be restarted yet */ }
+        }
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchDashboardData();
+            refreshInterval = setInterval(fetchDashboardData, 30000);
+            setInterval(livePing, 10000);
+            setInterval(updateNextCheckDisplay, 1000);
+            const modal = document.getElementById('settingsModal');
+            window.addEventListener('click', (event) => {
+                if (event.target === modal) closeSettingsModal();
+            });
+        });
+    </script>
+</body>
+</html>

@@ -4,6 +4,7 @@ import threading
 import smtplib
 import ssl
 import re
+import sys
 import urllib.request
 import urllib.error
 import urllib.parse
@@ -11,7 +12,22 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 import os
 
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# When bundled by PyInstaller, sys.executable = the EXE path.
+# _BASE_DIR is used for writable data (config.json, encryption.key, logs).
+# _BUNDLE_DIR is where read-only bundled files live (index.html).
+if getattr(sys, 'frozen', False):
+    _BASE_DIR = os.path.dirname(sys.executable)
+    _BUNDLE_DIR = sys._MEIPASS
+    # Redirect output to log file — Windows Service has no console
+    _log_dir = os.path.join(_BASE_DIR, "logs")
+    os.makedirs(_log_dir, exist_ok=True)
+    _log_file = open(os.path.join(_log_dir, "app.log"), "a", encoding="utf-8", buffering=1)
+    sys.stdout = _log_file
+    sys.stderr = _log_file
+else:
+    _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    _BUNDLE_DIR = _BASE_DIR
+
 CONFIG_PATH = os.environ.get("CONFIG_PATH", os.path.join(_BASE_DIR, "config.json"))
 
 # ---------------------------------------------------------------------------
@@ -438,7 +454,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": str(e)}, 500)
 
         elif self.path in ("/", "/index.html"):
-            index_path = os.path.join(_BASE_DIR, "index.html")
+            index_path = os.path.join(_BUNDLE_DIR, "index.html")
             try:
                 with open(index_path, "rb") as f:
                     body = f.read()

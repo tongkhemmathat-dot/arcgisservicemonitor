@@ -9,9 +9,10 @@ Dashboard สำหรับตรวจสอบสถานะ ArcGIS REST Ser
 
 - [โครงสร้างไฟล์](#โครงสร้างไฟล์)
 - [วิธี Deploy](#วิธี-deploy)
-  - [1. Windows + IIS (On-Premise)](#1-windows--iis-on-premise)
-  - [2. Docker — Single Container](#2-docker--single-container)
-  - [3. Docker Compose — Multi-Environment](#3-docker-compose--multi-environment)
+  - [1. Windows EXE Installer (แนะนำสำหรับ Windows Server)](#1-windows-exe-installer)
+  - [2. Windows + IIS (On-Premise)](#2-windows--iis-on-premise)
+  - [3. Docker — Single Container](#3-docker--single-container)
+  - [4. Docker Compose — Multi-Environment](#4-docker-compose--multi-environment)
     - [Development](#development)
     - [Staging](#staging)
     - [Production](#production)
@@ -28,6 +29,11 @@ arcgisservicemonitor/
 ├── monitor_backend.py        API Server + Monitor Loop (backend)
 ├── index.html                Dashboard (frontend)
 ├── config.example.json       ตัวอย่าง config
+│
+├── installer/
+│   ├── build.bat             สคริปต์ build EXE (รันบน Windows)
+│   ├── build.spec            PyInstaller spec
+│   └── installer.iss         Inno Setup script → สร้าง Setup.exe
 │
 ├── Dockerfile                สำหรับ Docker build (backend)
 ├── docker-compose.yml        Base config (ใช้คู่กับ override ด้านล่าง)
@@ -49,7 +55,73 @@ arcgisservicemonitor/
 
 ## วิธี Deploy
 
-### 1. Windows + IIS (On-Premise)
+### 1. Windows EXE Installer
+
+ติดตั้งแบบ double-click ไม่ต้องมี Python หรือ IIS บน target server  
+Backend ถูก bundle เป็น `.exe` เดียว และลงทะเบียนเป็น Windows Service อัตโนมัติ
+
+**ความต้องการ (บนเครื่อง build เท่านั้น):**
+- Python 3.8+ (เฉพาะเครื่องที่ build)
+- [Inno Setup 6](https://jrsoftware.org/isinfo.php) (เฉพาะเครื่องที่ build)
+
+**ขั้นตอน:**
+
+#### ขั้นที่ 1 — Build EXE
+
+รัน `installer\build.bat` บนเครื่อง Windows ที่มี Python:
+
+```cmd
+installer\build.bat
+```
+
+สคริปต์จะ:
+1. ติดตั้ง PyInstaller และ dependencies อัตโนมัติ
+2. Bundle `monitor_backend.py` + `index.html` + `cryptography` → `installer\dist\ArcGISMonitor\`
+3. แจ้งให้ไปต่อที่ Inno Setup
+
+#### ขั้นที่ 2 — สร้าง Installer EXE
+
+1. เปิด **Inno Setup Compiler**
+2. เปิดไฟล์ `installer\installer.iss`
+3. กด **Build → Compile** (หรือ `Ctrl+F9`)
+4. ไฟล์ installer จะอยู่ที่ `installer\output\ArcGISMonitor-Setup-1.0.0.exe`
+
+#### ขั้นที่ 3 — ติดตั้งบน Windows Server
+
+1. คัดลอก `ArcGISMonitor-Setup-1.0.0.exe` ไปยัง target server
+2. Double-click → Next → Install
+3. Installer จะ:
+   - ติดตั้งไฟล์ไปที่ `C:\Program Files\ArcGIS Service Monitor\`
+   - ลงทะเบียนเป็น **Windows Service** (auto-start)
+   - เริ่ม service ทันที
+   - เปิด Dashboard ใน browser
+
+เปิด dashboard: **`http://localhost:8000`**
+
+#### Log Files
+
+```
+C:\Program Files\ArcGIS Service Monitor\logs\app.log
+```
+
+#### จัดการ Service
+
+```cmd
+sc start ArcGISMonitor      # เริ่ม
+sc stop  ArcGISMonitor      # หยุด
+sc query ArcGISMonitor      # ดูสถานะ
+```
+
+#### Uninstall
+
+**Control Panel → Programs → ArcGIS Service Monitor → Uninstall**  
+Uninstaller จะหยุดและลบ Windows Service อัตโนมัติ
+
+---
+
+### 2. Windows + IIS (On-Premise)
+
+> ใช้แนวทางนี้ถ้าต้องการให้ IIS serve frontend บน port 80/443 และ proxy ไปที่ backend
 
 สำหรับ server Windows ที่ใช้ IIS อยู่แล้ว
 
@@ -168,7 +240,7 @@ iisreset
 
 ---
 
-### 2. Docker — Single Container
+### 3. Docker — Single Container
 
 สำหรับ server ที่มี Docker และต้องการรันด้วยคำสั่งเดียว โดยไม่ใช้ nginx แยก  
 Backend จะ serve `index.html` เองที่ `/` และ `/api/*` ผ่าน port เดียว
@@ -207,7 +279,7 @@ docker run -d -p 80:8000 -v arcgis-data:/data --restart unless-stopped arcgis-mo
 
 ---
 
-### 3. Docker Compose — Multi-Environment
+### 4. Docker Compose — Multi-Environment
 
 สถาปัตยกรรมแบบ 2 container: **nginx** (frontend) + **Python** (backend)
 

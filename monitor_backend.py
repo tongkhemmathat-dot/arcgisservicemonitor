@@ -647,9 +647,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "Not Found"}, 404)
 
 
-def run_server():
-    host = os.environ.get("HOST", "127.0.0.1")
-    port = int(os.environ.get("PORT", "8000"))
+def run_server(host=None, port=None):
+    host = host or os.environ.get("HOST", "127.0.0.1")
+    port = port or int(os.environ.get("PORT", "8000"))
     httpd = ThreadingHTTPServer((host, port), RequestHandler)
     print(f"ArcGIS Monitor running at http://{host}:{port}")
     print(f"Config file: {CONFIG_PATH}")
@@ -657,6 +657,12 @@ def run_server():
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="ArcGIS Service Monitor")
+    parser.add_argument("--host", default=None, help="Bind host (default: HOST env or 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=None, help="Port (default: PORT env or 8000)")
+    args, _ = parser.parse_known_args()
+
     if not os.path.exists(CONFIG_PATH):
         print(f"Creating default config at {CONFIG_PATH}")
         default_config = {
@@ -677,4 +683,4 @@ if __name__ == "__main__":
     monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
     monitor_thread.start()
 
-    run_server()
+    run_server(host=args.host, port=args.port)

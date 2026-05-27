@@ -29,7 +29,8 @@ arcgisservicemonitor/
 │
 ├── windows/
 │   ├── start.bat             รัน backend ตรงๆ (dev/test)
-│   ├── web.config            IIS reverse proxy config
+│   ├── web.config            IIS config — สำหรับ IIS+NSSM (serve index.html + proxy /api/)
+│   ├── web.config.proxy      IIS config — สำหรับ EXE+IIS (proxy ทุก request ไป port 8000)
 │   └── installer/
 │       ├── build.bat         สคริปต์ build installer (รันบนเครื่อง build)
 │       ├── build.spec        PyInstaller spec
@@ -97,6 +98,63 @@ sc query ArcGISMonitor    # ดูสถานะ
 
 Control Panel → Programs → ArcGIS Service Monitor → Uninstall  
 Uninstaller หยุดและลบ Windows Service อัตโนมัติ
+
+---
+
+#### ใช้งานร่วมกับ IIS (HTTPS / Custom Domain)
+
+เหมาะสำหรับกรณีที่ต้องการให้ IIS รับ request บน port 80/443 แล้ว proxy ไปที่ service  
+Backend ยังทำงานบน port 8000 เหมือนเดิม IIS ทำหน้าที่เป็น reverse proxy เท่านั้น
+
+```
+ผู้ใช้ → IIS :80 / :443 → ArcGISMonitor.exe :8000
+```
+
+**สิ่งที่ต้องมี:**
+- [IIS URL Rewrite Module](https://www.iis.net/downloads/microsoft/url-rewrite)
+- [IIS ARR (Application Request Routing)](https://www.iis.net/downloads/microsoft/application-request-routing)
+
+**ขั้นตอน:**
+
+**1. ติดตั้ง URL Rewrite + ARR แล้วเปิด Proxy** (PowerShell as Administrator):
+
+```powershell
+& "$env:windir\system32\inetsrv\appcmd.exe" set config -section:system.webServer/proxy /enabled:"True"
+```
+
+**2. สร้าง IIS Website**
+
+เปิด IIS Manager → Add Website:
+
+| ฟิลด์ | ค่า |
+|-------|-----|
+| Site name | `ArcGISMonitor` |
+| Physical path | folder เปล่าใดก็ได้ เช่น `C:\inetpub\arcgismonitor` |
+| Port | `80` (หรือ `443` ถ้ามี SSL) |
+| Host name | domain ของ server (ถ้ามี) |
+
+**3. วาง web.config**
+
+คัดลอก `windows\web.config.proxy` ไปวางที่ physical path แล้วเปลี่ยนชื่อเป็น `web.config`:
+
+```cmd
+copy windows\web.config.proxy C:\inetpub\arcgismonitor\web.config
+```
+
+**4. ทดสอบ**
+
+```cmd
+curl http://localhost/api/monitor/dashboard
+```
+
+ควรได้ JSON กลับมา — เข้า dashboard ที่ `http://localhost/`
+
+**ตั้งค่า HTTPS (ถ้าต้องการ):**
+
+IIS Manager → Sites → ArcGISMonitor → Bindings → Add → Type: `https` → เลือก SSL Certificate  
+ไม่ต้องแก้ไขไฟล์ใดๆ เพิ่มเติม
+
+> **หมายเหตุ:** `web.config` นี้ proxy **ทุก request** ไปที่ port 8000 ต่างจาก `windows\web.config` ที่ serve `index.html` เองและ proxy เฉพาะ `/api/`
 
 ---
 
@@ -264,13 +322,20 @@ sc query ArcGISMonitor
 type <install_path>\logs\app.log
 ```
 
-### IIS 502 Bad Gateway
+### IIS 502 Bad Gateway (EXE + IIS)
 
+```cmd
+REM 1. ตรวจสอบ service ทำงานอยู่
+sc query ArcGISMonitor
+
+REM 2. ทดสอบ backend ตรงๆ (ข้าม IIS)
+curl http://127.0.0.1:8000/api/monitor/dashboard
+
+REM 3. ตรวจสอบ ARR Proxy เปิดอยู่
+%windir%\system32\inetsrv\appcmd list config -section:system.webServer/proxy
 ```
-1. ตรวจสอบ service: sc query ArcGISMonitor
-2. ทดสอบ backend: curl http://127.0.0.1:8000/api/monitor/dashboard
-3. ตรวจสอบ ARR Proxy เปิดอยู่
-```
+
+ถ้าขั้นที่ 2 ผ่านแต่ IIS ยังเป็น 502 → ปัญหาอยู่ที่ ARR config ให้ตรวจสอบขั้นที่ 3
 
 ### Docker — nginx 502
 

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    IIS Reverse Proxy config — ใช้กับ EXE Installer
+    IIS รับ request บน port 80/443 แล้ว proxy ทุก request ไปที่ ArcGISMonitor service
+
+    ความต้องการ:
+      - IIS URL Rewrite Module  https://www.iis.net/downloads/microsoft/url-rewrite
+      - IIS ARR (Application Request Routing)  https://www.iis.net/downloads/microsoft/application-request-routing
+
+    วิธีใช้:
+      1. วางไฟล์นี้ที่ physical path ของ IIS Website แล้วเปลี่ยนชื่อเป็น web.config
+      2. IIS Website physical path เป็น folder เปล่าก็ได้ (ไม่ต้องมีไฟล์ใดๆ)
+      3. ดูคู่มือเพิ่มเติมใน README.md
+-->
+<configuration>
+    <system.webServer>
+
+        <rewrite>
+            <rules>
+                <!-- Proxy ทุก request → ArcGISMonitor service บน port 8000 -->
+                <rule name="Proxy to ArcGIS Monitor" stopProcessing="true">
+                    <match url="(.*)" />
+                    <action type="Rewrite" url="http://127.0.0.1:8000/{R:1}" />
+                </rule>
+            </rules>
+        </rewrite>
+
+        <!-- Forward headers ที่จำเป็นไปให้ backend -->
+        <rewrite>
+            <allowedServerVariables>
+                <add name="HTTP_X_FORWARDED_FOR" />
+                <add name="HTTP_X_FORWARDED_PROTO" />
+                <add name="HTTP_X_REAL_IP" />
+            </allowedServerVariables>
+        </rewrite>
+
+        <httpProtocol>
+            <customHeaders>
+                <remove name="X-Powered-By" />
+                <add name="X-Content-Type-Options" value="nosniff" />
+                <add name="X-Frame-Options" value="SAMEORIGIN" />
+            </customHeaders>
+        </httpProtocol>
+
+    </system.webServer>
+</configuration>

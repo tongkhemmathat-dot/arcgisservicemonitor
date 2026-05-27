@@ -16,19 +16,48 @@ CONFIG_PATH = os.environ.get("CONFIG_PATH", os.path.join(_BASE_DIR, "config.json
 
 # ---------------------------------------------------------------------------
 # Password encryption (Fernet / AES-128-CBC)
-# Set ENCRYPTION_KEY env var to a Fernet key to enable.
-# Generate a key:  python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# Key priority: ENCRYPTION_KEY env var → key file next to config → auto-generate
 # ---------------------------------------------------------------------------
 _ENC_PREFIX = "enc:"
+_KEY_PATH = os.path.join(os.path.dirname(CONFIG_PATH), "encryption.key")
+
+def _load_or_create_key() -> bytes | None:
+    # 1. env var takes top priority
+    raw = os.environ.get("ENCRYPTION_KEY", "").strip()
+    if raw:
+        print("[CRYPTO] Using ENCRYPTION_KEY from environment variable.")
+        return raw.encode()
+
+    # 2. existing key file
+    if os.path.exists(_KEY_PATH):
+        with open(_KEY_PATH, "rb") as f:
+            key = f.read().strip()
+        print(f"[CRYPTO] Loaded encryption key from {_KEY_PATH}")
+        return key
+
+    # 3. auto-generate and persist
+    try:
+        from cryptography.fernet import Fernet
+        key = Fernet.generate_key()
+        os.makedirs(os.path.dirname(_KEY_PATH), exist_ok=True)
+        with open(_KEY_PATH, "wb") as f:
+            f.write(key)
+        print(f"[CRYPTO] Generated new encryption key → {_KEY_PATH}")
+        print(f"[CRYPTO] Back up this file to avoid losing access to stored passwords.")
+        return key
+    except Exception as e:
+        print(f"[CRYPTO] Could not generate key: {e}")
+        return None
+
 try:
     from cryptography.fernet import Fernet, InvalidToken
-    _raw_key = os.environ.get("ENCRYPTION_KEY", "").strip()
-    if _raw_key:
-        _fernet = Fernet(_raw_key.encode())
+    _key_bytes = _load_or_create_key()
+    if _key_bytes:
+        _fernet = Fernet(_key_bytes)
         print("[CRYPTO] Password encryption enabled.")
     else:
         _fernet = None
-        print("[CRYPTO] WARNING: ENCRYPTION_KEY not set — passwords stored as plain text.")
+        print("[CRYPTO] WARNING: encryption disabled — passwords stored as plain text.")
 except Exception as _e:
     _fernet = None
     print(f"[CRYPTO] cryptography library unavailable ({_e}) — passwords stored as plain text.")

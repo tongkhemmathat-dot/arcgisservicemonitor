@@ -1,6 +1,7 @@
 # Config and secrets — never commit
 config.json
 .env
+encryption.key
 
 # Logs
 logs/

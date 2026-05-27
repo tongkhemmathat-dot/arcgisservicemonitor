@@ -1,5 +1,6 @@
 .git
 .env
+encryption.key
 *.bat
 web.config
 config.json

@@ -12,7 +12,7 @@ services:
       HOST: "0.0.0.0"
       PORT: "8000"
       CONFIG_PATH: "/data/config.json"
-      ENCRYPTION_KEY: "${ENCRYPTION_KEY:-}"   # set in .env file
+      ENCRYPTION_KEY: "${ENCRYPTION_KEY:-}"   # optional — auto-generated if blank
     volumes:
       - arcgis-data:/data
 

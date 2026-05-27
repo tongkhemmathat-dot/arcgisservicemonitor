@@ -107,14 +107,27 @@ def redact_password(stored: str) -> str:
 _token_cache = {}
 _token_lock = threading.Lock()
 
-def get_arcgis_token(service_url, username, password):
-    """Generate and cache an ArcGIS token for the given server."""
+def get_arcgis_token(service_url, username, password, auth_type="server"):
+    """Generate and cache an ArcGIS token.
+
+    auth_type:
+        "server"  → /arcgis/tokens/generateToken          (ArcGIS Server)
+        "portal"  → /portal/sharing/rest/generateToken    (ArcGIS Enterprise Portal)
+        "online"  → https://www.arcgis.com/sharing/rest/generateToken  (ArcGIS Online)
+    """
     if not username or not password:
         return None, None
 
     parsed = urllib.parse.urlparse(service_url)
     server_base = f"{parsed.scheme}://{parsed.netloc}"
-    token_url = server_base + "/arcgis/tokens/generateToken"
+
+    if auth_type == "online":
+        token_url = "https://www.arcgis.com/sharing/rest/generateToken"
+    elif auth_type == "portal":
+        token_url = server_base + "/portal/sharing/rest/generateToken"
+    else:  # "server" (default)
+        token_url = server_base + "/arcgis/tokens/generateToken"
+
     cache_key = (token_url, username)
 
     with _token_lock:
@@ -216,6 +229,7 @@ def check_services(manual_trigger=False):
 
         username = service.get("username", "")
         password = decrypt_password(service.get("password", ""))
+        auth_type = service.get("authType", "server")
 
         # Build check URL — append token if credentials provided
         sep = "&" if "?" in url else "?"
@@ -223,7 +237,7 @@ def check_services(manual_trigger=False):
         token_error = None
 
         if username and password:
-            token, token_error = get_arcgis_token(url, username, password)
+            token, token_error = get_arcgis_token(url, username, password, auth_type)
             if token:
                 check_url += f"&token={token}"
 
@@ -348,11 +362,12 @@ def quick_ping(service):
 
     username = service.get("username", "")
     password = decrypt_password(service.get("password", ""))
+    auth_type = service.get("authType", "server")
     sep = "&" if "?" in url else "?"
     check_url = url + sep + "f=json"
 
     if username and password:
-        token, _ = get_arcgis_token(url, username, password)
+        token, _ = get_arcgis_token(url, username, password, auth_type)
         if token:
             check_url += f"&token={token}"
 
@@ -489,6 +504,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "url": url,
                     "username": payload.get("username", ""),
                     "password": encrypt_password(payload.get("password", "")),
+                    "authType": payload.get("authType", "server"),
                     "status": "Unknown",
                     "pingMs": None,
                     "pingHistory": [],
@@ -517,6 +533,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                             svc["username"] = payload["username"]
                         if payload.get("password"):
                             svc["password"] = encrypt_password(payload["password"])
+                        if "authType" in payload:
+                            svc["authType"] = payload["authType"]
                         updated = True
                         break
                 if not updated:

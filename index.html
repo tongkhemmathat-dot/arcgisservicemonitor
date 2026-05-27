@@ -814,11 +814,12 @@
             background: var(--panel-bg);
             border: 1px solid var(--panel-border);
             border-radius: var(--radius);
-            padding: 30px;
-            max-height: 80vh;
-            width: 90%;
-            max-width: 600px;
+            padding: 24px 28px;
+            max-height: 88vh;
+            width: 95%;
+            max-width: 700px;
             overflow-y: auto;
+            overflow-x: hidden;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
         }
 
@@ -1099,6 +1100,124 @@
         .stat-card.offline .stat-bar-fill { background: var(--neon-red); }
         .stat-card.slow .stat-bar-fill    { background: var(--neon-yellow); }
         .stat-card.total .stat-bar-fill   { background: var(--neon-blue); }
+
+        /* ─── Settings modal improvements ─────── */
+        .modal-tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--panel-border);
+            overflow-x: auto;
+        }
+        .tab-btn {
+            padding: 9px 18px;
+            font-size: 13px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        /* 2-column form grid */
+        .form-grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0 14px;
+        }
+        .form-grid-2 .form-group { margin-bottom: 13px; }
+        @media (max-width: 500px) { .form-grid-2 { grid-template-columns: 1fr; } }
+
+        /* compact form-group */
+        .form-group { margin-bottom: 13px; }
+        .form-label { font-size: 11px; }
+        .form-input  { padding: 8px 11px; font-size: 13px; }
+
+        /* toggle-option row (Ignore TLS / Disable STARTTLS) */
+        .toggle-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 13px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            cursor: pointer;
+        }
+        .toggle-option input[type=checkbox] {
+            width: 15px; height: 15px;
+            cursor: pointer; flex-shrink: 0;
+        }
+        .toggle-option-text .form-label { margin: 0; cursor: pointer; }
+        .toggle-option-text .form-hint  { margin-top: 1px; }
+        .toggle-option.warning { background:rgba(255,201,64,0.05); border:1px solid rgba(255,201,64,0.18); }
+        .toggle-option.muted   { background:rgba(74,96,128,0.08);  border:1px solid rgba(74,96,128,0.2); }
+
+        /* service card in settings list */
+        .svc-card {
+            background: rgba(15,21,37,0.6);
+            border: 1px solid rgba(30,45,74,0.7);
+            border-radius: 7px;
+            padding: 11px 14px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        .svc-card:hover { border-color: rgba(0,200,255,0.2); background: rgba(15,21,37,0.85); }
+        .svc-card-dot {
+            width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+        }
+        .svc-card-body { flex: 1; min-width: 0; }
+        .svc-card-name {
+            font-size: 13px; font-weight: 600; color: #fff;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .svc-card-url {
+            font-family: var(--font-tech); font-size: 10px; color: var(--text-muted);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;
+        }
+        .svc-card-meta {
+            display: flex; flex-wrap: wrap; align-items: center;
+            gap: 5px; margin-top: 5px;
+        }
+        .svc-card-actions { display: flex; gap: 6px; flex-shrink: 0; }
+        .btn-icon-sm {
+            width: 30px; height: 30px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 5px; border: 1px solid; cursor: pointer;
+            font-size: 13px; transition: all 0.15s; background: transparent;
+        }
+        .btn-icon-sm.edit  { border-color: rgba(0,200,255,0.3); color: var(--neon-blue); }
+        .btn-icon-sm.edit:hover  { background: rgba(0,200,255,0.1); box-shadow: 0 0 8px rgba(0,200,255,0.2); }
+        .btn-icon-sm.del   { border-color: rgba(255,59,92,0.3);  color: var(--neon-red); }
+        .btn-icon-sm.del:hover   { background: rgba(255,59,92,0.1);  box-shadow: 0 0 8px rgba(255,59,92,0.2); }
+
+        /* badge mini */
+        .badge-mini {
+            display: inline-flex; padding: 1px 6px; border-radius: 3px;
+            font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+            border: 1px solid;
+        }
+        .badge-mini.type { background:rgba(74,96,128,0.15); color:var(--text-muted); border-color:rgba(74,96,128,0.35); }
+        .badge-mini.interval { background:rgba(0,200,255,0.07); color:var(--neon-blue); border-color:rgba(0,200,255,0.2); font-family:var(--font-tech); }
+
+        /* form add/edit header */
+        .form-card {
+            background: rgba(0,200,255,0.03);
+            border: 1px solid rgba(0,200,255,0.1);
+            border-radius: 8px;
+            padding: 16px 16px 10px;
+            margin-bottom: 18px;
+        }
+
+        /* section divider compact */
+        .section-divider {
+            display: flex; align-items: center; gap: 10px;
+            color: var(--text-muted); font-size: 10px; font-family: var(--font-tech);
+            letter-spacing: 0.1em; text-transform: uppercase;
+            margin: 14px 0 10px;
+        }
+        .section-divider::before, .section-divider::after {
+            content: ''; flex: 1; height: 1px; background: var(--panel-border);
+        }
     </style>
 </head>
 <body>
@@ -1208,140 +1327,172 @@
 
             <!-- Map Services Tab -->
             <div id="map-services" class="tab-content active">
-                <div>
-                    <div class="modal-section-title">Add New Map Service</div>
 
-                    <div class="form-group">
-                        <label class="form-label">Service Name</label>
-                        <input type="text" id="mapServiceName" class="form-input" placeholder="e.g., Main Map Service" />
+                <!-- ── Add / Edit form card ── -->
+                <div class="form-card" id="svc-form-card">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+                        <span id="form-card-title" style="font-size:13px; font-weight:600; color:var(--neon-blue); letter-spacing:0.05em;">➕ ADD SERVICE</span>
+                        <button id="service-cancel-btn" onclick="cancelEditService()"
+                                style="display:none; background:transparent; border:none; color:var(--text-muted); font-size:18px; cursor:pointer; line-height:1; padding:0 2px;"
+                                title="Cancel edit">&times;</button>
                     </div>
 
+                    <!-- Row 1: Name (full) -->
+                    <div class="form-group">
+                        <label class="form-label">ชื่อ Service</label>
+                        <input type="text" id="mapServiceName" class="form-input" placeholder="เช่น StreetMap, Flood Zone" />
+                    </div>
+
+                    <!-- Row 2: URL (full) -->
                     <div class="form-group">
                         <label class="form-label">Service URL</label>
-                        <input type="url" id="mapServiceUrl" class="form-input" placeholder="e.g., https://gis.example.com/rest/services/..." />
+                        <input type="url" id="mapServiceUrl" class="form-input" placeholder="https://gis.example.com/arcgis/rest/services/…/MapServer" />
                     </div>
 
-                    <div class="form-group">
-                        <label class="form-label">Service Type</label>
-                        <select id="mapServiceType" class="form-input" style="cursor: pointer;">
-                            <option value="MapServer">MapServer</option>
-                            <option value="FeatureServer">FeatureServer</option>
-                            <option value="ImageServer">ImageServer</option>
-                            <option value="GeocodeServer">GeocodeServer</option>
-                        </select>
+                    <!-- Row 3: Type + Interval (2-col) -->
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label class="form-label">ประเภท</label>
+                            <select id="mapServiceType" class="form-input" style="cursor:pointer;">
+                                <option value="MapServer">MapServer</option>
+                                <option value="FeatureServer">FeatureServer</option>
+                                <option value="ImageServer">ImageServer</option>
+                                <option value="GeocodeServer">GeocodeServer</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Check Interval (นาที)</label>
+                            <input type="number" id="mapServiceInterval" class="form-input"
+                                   min="1" max="1440" placeholder="เว้นว่าง = global" />
+                        </div>
                     </div>
 
-                    <div class="form-group">
-                        <label class="form-label">Username</label>
-                        <input type="text" id="mapServiceUsername" class="form-input" placeholder="Username (optional)" />
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Password</label>
-                        <input type="password" id="mapServicePassword" class="form-input" placeholder="Password (optional)" />
-                    </div>
-
-                    <div class="form-group" id="authTypeGroup" style="display:none;">
-                        <label class="form-label">Authentication Type</label>
-                        <select id="mapServiceAuthType" class="form-input" style="cursor: pointer;" onchange="updateAuthTypeHint()">
-                            <option value="server">ArcGIS Server</option>
-                            <option value="portal">ArcGIS Portal / Enterprise</option>
-                            <option value="online">ArcGIS Online</option>
-                        </select>
-                        <div class="form-hint"><span id="authTypeHint"></span></div>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Check Interval (นาที)</label>
-                        <input type="number" id="mapServiceInterval" class="form-input"
-                               min="1" max="1440" placeholder="ใช้ค่า global (เว้นว่าง)" />
-                        <div class="form-hint">เว้นว่างไว้ = ใช้ interval ของระบบ · ระบุค่า = กำหนดรอบเช็คเฉพาะ service นี้</div>
-                    </div>
-
+                    <!-- Row 4: Tags (full) -->
                     <div class="form-group">
                         <label class="form-label">Tags / กลุ่ม</label>
                         <div class="tag-input-container" id="tagInputContainer" onclick="document.getElementById('tagInput').focus()">
                             <div id="tagChipsEdit" style="display:contents;"></div>
-                            <input type="text" id="tagInput" placeholder="พิมพ์แล้วกด Enter หรือ , ..." autocomplete="off" />
+                            <input type="text" id="tagInput" placeholder="พิมพ์แล้วกด Enter หรือ , …" autocomplete="off" />
                         </div>
-                        <div class="form-hint">เช่น production, ระบบแผนที่, critical</div>
                     </div>
 
-                    <button class="btn-submit" id="service-submit-btn" onclick="addMapService()">➕ Add Service</button>
-                    <button class="btn-submit" id="service-cancel-btn" onclick="cancelEditService()" style="display:none; background: transparent; color: var(--neon-yellow); border: 1px solid var(--neon-yellow); margin-top: 8px;">✕ Cancel Edit</button>
+                    <!-- Auth section (collapsible) -->
+                    <div class="section-divider">
+                        <span>Authentication</span>
+                        <span style="font-size:9px; color:var(--text-muted); text-transform:none; letter-spacing:0;">(optional)</span>
+                    </div>
 
-                    <div class="modal-section-title">Configured Services</div>
-                    <div id="servicesList"></div>
+                    <!-- Row 5: Username + Password (2-col) -->
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label class="form-label">Username</label>
+                            <input type="text" id="mapServiceUsername" class="form-input" placeholder="เว้นว่างถ้าไม่ต้อง auth" />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Password</label>
+                            <input type="password" id="mapServicePassword" class="form-input" placeholder="Password" />
+                        </div>
+                    </div>
+
+                    <!-- Auth type (show when username filled) -->
+                    <div class="form-group" id="authTypeGroup" style="display:none;">
+                        <label class="form-label">Authentication Type</label>
+                        <select id="mapServiceAuthType" class="form-input" style="cursor:pointer;" onchange="updateAuthTypeHint()">
+                            <option value="server">ArcGIS Server</option>
+                            <option value="portal">ArcGIS Portal / Enterprise</option>
+                            <option value="online">ArcGIS Online</option>
+                        </select>
+                        <div class="form-hint" id="authTypeHint" style="margin-top:4px;"></div>
+                    </div>
+
+                    <button class="btn-submit" id="service-submit-btn" onclick="addMapService()" style="margin-top:4px;">
+                        ➕ Add Service
+                    </button>
                 </div>
+
+                <!-- ── Configured Services list ── -->
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                    <span style="font-size:11px; font-weight:600; letter-spacing:0.1em; color:var(--text-muted); font-family:var(--font-tech);">CONFIGURED SERVICES</span>
+                    <span id="svc-count-badge" style="font-family:var(--font-tech); font-size:10px; color:var(--neon-blue); background:rgba(0,200,255,0.08); border:1px solid rgba(0,200,255,0.2); padding:1px 8px; border-radius:10px;"></span>
+                </div>
+                <div id="servicesList"></div>
+
             </div>
 
             <!-- Email Configuration Tab -->
             <div id="email-config" class="tab-content">
-                <div>
-                    <div class="modal-section-title">Email Server Configuration</div>
 
-                    <div class="form-group">
+                <!-- SMTP Server row -->
+                <div class="form-grid-2">
+                    <div class="form-group" style="grid-column:1/3;">
                         <label class="form-label">SMTP Server <span style="color:var(--neon-red)">*</span></label>
-                        <input type="text" id="smtpServer" class="form-input" placeholder="e.g., 192.168.1.10 หรือ smtp.gmail.com" />
+                        <input type="text" id="smtpServer" class="form-input" placeholder="เช่น 192.168.1.10 หรือ smtp.gmail.com" />
                     </div>
-
                     <div class="form-group">
-                        <label class="form-label">SMTP Port</label>
-                        <input type="number" id="smtpPort" class="form-input" placeholder="25 / 587 (TLS) / 465 (SSL)" value="587" />
+                        <label class="form-label">Port</label>
+                        <input type="number" id="smtpPort" class="form-input" placeholder="25 / 587 / 465" value="587" />
                     </div>
-
                     <div class="form-group">
-                        <label class="form-label">From Email Address</label>
-                        <input type="email" id="fromEmail" class="form-input" placeholder="e.g., monitor@company.com" />
+                        <label class="form-label">From Address</label>
+                        <input type="email" id="fromEmail" class="form-input" placeholder="monitor@company.com" />
                     </div>
+                </div>
 
-                    <div class="modal-section-title">Authentication <span style="font-size:10px; font-weight:400; color:var(--text-muted); text-transform:none; letter-spacing:0;">(optional — leave blank for relay)</span></div>
+                <div class="section-divider">
+                    <span>Authentication</span>
+                    <span style="font-size:9px; color:var(--text-muted); text-transform:none; letter-spacing:0;">เว้นว่างสำหรับ relay mail</span>
+                </div>
 
+                <div class="form-grid-2">
                     <div class="form-group">
                         <label class="form-label">Username</label>
-                        <input type="text" id="emailUsername" class="form-input" placeholder="เว้นว่างสำหรับ relay mail (ไม่ต้อง auth)" />
+                        <input type="text" id="emailUsername" class="form-input" placeholder="(optional)" />
                     </div>
-
                     <div class="form-group">
                         <label class="form-label">Password</label>
-                        <input type="password" id="emailPassword" class="form-input" placeholder="เว้นว่างสำหรับ relay mail" />
+                        <input type="password" id="emailPassword" class="form-input" placeholder="(optional)" />
                     </div>
-
-                    <div class="form-group" style="flex-direction:row; align-items:center; gap:10px; padding:10px 14px; background:rgba(255,201,64,0.05); border:1px solid rgba(255,201,64,0.15); border-radius:6px;">
-                        <input type="checkbox" id="ignoreTls" style="width:16px; height:16px; accent-color:var(--neon-yellow); cursor:pointer; flex-shrink:0;" />
-                        <div>
-                            <label for="ignoreTls" class="form-label" style="cursor:pointer; margin:0;">Ignore TLS / SSL Errors</label>
-                            <div class="form-hint" style="margin-top:2px;">ข้ามการตรวจสอบ certificate — ใช้สำหรับ self-signed cert หรือ internal relay</div>
-                        </div>
-                    </div>
-
-                    <div class="form-group" style="flex-direction:row; align-items:center; gap:10px; padding:10px 14px; background:rgba(74,96,128,0.08); border:1px solid rgba(74,96,128,0.2); border-radius:6px; margin-top:8px;">
-                        <input type="checkbox" id="disableStarttls" style="width:16px; height:16px; accent-color:var(--text-muted); cursor:pointer; flex-shrink:0;" />
-                        <div>
-                            <label for="disableStarttls" class="form-label" style="cursor:pointer; margin:0;">Disable STARTTLS</label>
-                            <div class="form-hint" style="margin-top:2px;">ใช้กับ SMTP relay port 25 ที่ไม่รองรับ STARTTLS เลย — ส่งแบบ plain text โดยตรง</div>
-                        </div>
-                    </div>
-
-                    <div class="modal-section-title">Alert Recipients</div>
-
-                    <div class="form-group">
-                        <label class="form-label">Add Recipient Email</label>
-                        <div style="display: flex; gap: 10px;">
-                            <input type="email" id="recipientEmail" class="form-input" placeholder="e.g., admin@company.com" style="flex: 1;" />
-                            <button class="btn-submit" onclick="addRecipient()" style="width: auto; margin: 0; padding: 10px 15px;">+</button>
-                        </div>
-                    </div>
-
-                    <div id="recipientsList" style="margin-bottom: 20px;"></div>
-
-                    <button class="btn-submit" onclick="saveEmailConfig()">💾 Save Email Configuration</button>
-                    <button class="btn-submit" id="test-email-btn" onclick="testEmailConfig()"
-                            style="background:transparent; color:var(--neon-blue); border:1px solid var(--neon-blue); margin-top:8px;">
-                        🧪 ทดสอบส่งอีเมล
-                    </button>
-                    <div id="emailTestResult" style="display:none; margin-top:12px; padding:12px 14px; border-radius:6px; border:1px solid; font-family:var(--font-tech); font-size:13px; line-height:1.6;"></div>
                 </div>
+
+                <label class="toggle-option warning" for="ignoreTls">
+                    <input type="checkbox" id="ignoreTls" style="accent-color:var(--neon-yellow);" />
+                    <div class="toggle-option-text">
+                        <div class="form-label">Ignore TLS / SSL Errors</div>
+                        <div class="form-hint">ข้ามการตรวจสอบ certificate — self-signed cert หรือ internal relay</div>
+                    </div>
+                </label>
+
+                <label class="toggle-option muted" for="disableStarttls">
+                    <input type="checkbox" id="disableStarttls" style="accent-color:var(--text-muted);" />
+                    <div class="toggle-option-text">
+                        <div class="form-label">Disable STARTTLS</div>
+                        <div class="form-hint">relay port 25 ที่ไม่รองรับ STARTTLS — ส่งแบบ plain SMTP โดยตรง</div>
+                    </div>
+                </label>
+
+                <div class="section-divider" style="margin-top:16px;">
+                    <span>Alert Recipients</span>
+                </div>
+
+                <div class="form-group">
+                    <div style="display:flex; gap:8px;">
+                        <input type="email" id="recipientEmail" class="form-input" placeholder="admin@company.com" style="flex:1;" />
+                        <button onclick="addRecipient()"
+                                style="background:rgba(0,232,122,0.1); border:1px solid rgba(0,232,122,0.3); color:var(--neon-green); padding:8px 14px; border-radius:4px; cursor:pointer; font-size:18px; line-height:1; transition:all 0.2s;"
+                                onmouseover="this.style.background='rgba(0,232,122,0.2)'" onmouseout="this.style.background='rgba(0,232,122,0.1)'">+</button>
+                    </div>
+                </div>
+                <div id="recipientsList" style="margin-bottom:16px;"></div>
+
+                <div style="display:flex; gap:8px; margin-top:4px;">
+                    <button class="btn-submit" onclick="saveEmailConfig()" style="flex:1;">💾 บันทึก</button>
+                    <button class="btn-submit" id="test-email-btn" onclick="testEmailConfig()"
+                            style="flex:1; background:transparent; color:var(--neon-blue); border:1px solid var(--neon-blue);">
+                        🧪 ทดสอบ
+                    </button>
+                </div>
+                <div id="emailTestResult" style="display:none; margin-top:10px; padding:11px 14px; border-radius:6px; border:1px solid; font-family:var(--font-tech); font-size:12px; line-height:1.6;"></div>
+
             </div>
 
             <!-- Monitor Settings Tab -->
@@ -1819,23 +1970,48 @@
 
         function renderServicesList(services) {
             const container = document.getElementById('servicesList');
+            const badge = document.getElementById('svc-count-badge');
+            if (badge) badge.textContent = services.length ? `${services.length} services` : '';
+
             if (services.length === 0) {
-                container.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 20px;">No services added yet</div>';
+                container.innerHTML = `<div class="empty-state" style="padding:30px 20px;">
+                    <div class="icon">🗺️</div>
+                    <div class="title">ยังไม่มี service</div>
+                    <div class="hint">กรอกข้อมูลด้านบนแล้วกด Add Service</div>
+                </div>`;
                 return;
             }
+
+            const STATUS_DOT = {
+                Online:  'var(--neon-green)',
+                Offline: 'var(--neon-red)',
+                Slow:    'var(--neon-yellow)',
+                Unknown: 'var(--text-muted)'
+            };
+
             let html = '';
             services.forEach(svc => {
+                const dotColor = STATUS_DOT[svc.status] || STATUS_DOT.Unknown;
+                const intervalLabel = svc.checkIntervalMinutes ? `${svc.checkIntervalMinutes}m` : 'global';
+                const tagsHtml = (svc.tags||[]).length
+                    ? svc.tags.map(t => tagChipHtml(t)).join('')
+                    : '';
                 html += `
-                    <div class="service-item">
-                        <div class="service-item-info">
-                            <div class="service-item-name">${svc.serviceName}</div>
-                            <div class="service-item-url">${svc.url}</div>
-                            <div style="color: var(--text-muted); font-size: 11px; margin-top: 4px;">Type: ${svc.serviceType} &nbsp;&middot;&nbsp; Interval: ${svc.checkIntervalMinutes ? svc.checkIntervalMinutes + ' min' : 'global'}</div>
-                            ${(svc.tags||[]).length ? `<div class="service-tags" style="margin-top:5px;">${svc.tags.map(t=>tagChipHtml(t)).join('')}</div>` : ''}
+                    <div class="svc-card">
+                        <div class="svc-card-dot" style="background:${dotColor}; box-shadow:0 0 5px ${dotColor};"></div>
+                        <div class="svc-card-body">
+                            <div class="svc-card-name">${svc.serviceName}</div>
+                            <div class="svc-card-url" title="${svc.url}">${svc.url}</div>
+                            <div class="svc-card-meta">
+                                <span class="badge-mini type">${svc.serviceType}</span>
+                                <span class="badge-mini interval">⏱ ${intervalLabel}</span>
+                                ${svc.username ? `<span class="badge-mini" style="background:rgba(167,139,250,0.1);color:#a78bfa;border-color:rgba(167,139,250,0.25);">🔑 ${svc.authType||'auth'}</span>` : ''}
+                                ${tagsHtml}
+                            </div>
                         </div>
-                        <div class="service-item-actions">
-                            <button class="btn-small" style="background:rgba(0,200,255,0.1);border-color:rgba(0,200,255,0.3);color:var(--neon-blue);" onclick="editMapService(${svc.id})">&#x270F;&#xFE0F;</button>
-                            <button class="btn-small" onclick="deleteMapService(${svc.id})">&#x1F5D1;&#xFE0F;</button>
+                        <div class="svc-card-actions">
+                            <button class="btn-icon-sm edit" onclick="editMapService(${svc.id})" title="แก้ไข">✏️</button>
+                            <button class="btn-icon-sm del"  onclick="deleteMapService(${svc.id})" title="ลบ">🗑️</button>
                         </div>
                     </div>`;
             });
@@ -1865,7 +2041,8 @@
 
         function updateAuthTypeHint() {
             const authType = document.getElementById('mapServiceAuthType').value;
-            document.getElementById('authTypeHint').textContent = AUTH_TYPE_HINTS[authType] || '';
+            const el = document.getElementById('authTypeHint');
+            if (el) el.textContent = AUTH_TYPE_HINTS[authType] || '';
         }
 
         async function addMapService() {
@@ -1919,8 +2096,12 @@
             currentTags = [];
             renderTagChips();
             if (document.getElementById('tagInput')) document.getElementById('tagInput').value = '';
-            document.getElementById('service-submit-btn').textContent = 'Add Service';
+            document.getElementById('service-submit-btn').textContent = '➕ Add Service';
             document.getElementById('service-cancel-btn').style.display = 'none';
+            const titleEl = document.getElementById('form-card-title');
+            if (titleEl) titleEl.textContent = '➕ ADD SERVICE';
+            const card = document.getElementById('svc-form-card');
+            if (card) card.style.borderColor = 'rgba(0,200,255,0.1)';
         }
 
         async function editMapService(id) {
@@ -1941,8 +2122,12 @@
                 currentTags = [...(svc.tags || [])];
                 renderTagChips();
                 currentEditId = id;
-                document.getElementById('service-submit-btn').textContent = 'Update Service';
+                document.getElementById('service-submit-btn').textContent = '💾 Update Service';
                 document.getElementById('service-cancel-btn').style.display = 'block';
+                const titleEl = document.getElementById('form-card-title');
+                if (titleEl) titleEl.textContent = '✏️ EDIT SERVICE';
+                const card = document.getElementById('svc-form-card');
+                if (card) card.style.borderColor = 'rgba(255,201,64,0.2)';
                 document.getElementById('mapServiceName').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 document.getElementById('mapServiceName').focus();
             } catch (e) {

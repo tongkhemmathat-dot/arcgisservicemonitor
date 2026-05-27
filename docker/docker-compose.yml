@@ -13,6 +13,10 @@ services:
       PORT: "8000"
       CONFIG_PATH: "/data/config.json"
       ENCRYPTION_KEY: "${ENCRYPTION_KEY:-}"   # optional — auto-generated if blank
+    # dns: ระบุ DNS ของ network ภายในองค์กร เพื่อให้ resolve hostname เช่น mail gateway
+    # หากไม่ระบุ container จะใช้ 8.8.8.8 ซึ่งอาจ resolve internal hostname ไม่ได้
+    dns:
+      - ${INTERNAL_DNS:-8.8.8.8}
     volumes:
       - arcgis-data:/data
 
@@ -20,6 +24,8 @@ services:
     image: nginx:alpine
     depends_on:
       - backend
+    dns:
+      - ${INTERNAL_DNS:-8.8.8.8}
     volumes:
       - ./index.html:/usr/share/nginx/html/index.html:ro
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro

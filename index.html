@@ -1315,6 +1315,14 @@
                         </div>
                     </div>
 
+                    <div class="form-group" style="flex-direction:row; align-items:center; gap:10px; padding:10px 14px; background:rgba(74,96,128,0.08); border:1px solid rgba(74,96,128,0.2); border-radius:6px; margin-top:8px;">
+                        <input type="checkbox" id="disableStarttls" style="width:16px; height:16px; accent-color:var(--text-muted); cursor:pointer; flex-shrink:0;" />
+                        <div>
+                            <label for="disableStarttls" class="form-label" style="cursor:pointer; margin:0;">Disable STARTTLS</label>
+                            <div class="form-hint" style="margin-top:2px;">ใช้กับ SMTP relay port 25 ที่ไม่รองรับ STARTTLS เลย — ส่งแบบ plain text โดยตรง</div>
+                        </div>
+                    </div>
+
                     <div class="modal-section-title">Alert Recipients</div>
 
                     <div class="form-group">
@@ -1974,6 +1982,7 @@
                     : 'เว้นว่างสำหรับ relay mail';
                 document.getElementById('fromEmail').value = cfg.fromEmail || '';
                 document.getElementById('ignoreTls').checked = cfg.ignoreTls || false;
+                document.getElementById('disableStarttls').checked = cfg.disableStarttls || false;
                 emailRecipients = cfg.recipients || [];
                 renderRecipients();
             } catch (e) {
@@ -2021,14 +2030,15 @@
             const emailUsername = document.getElementById('emailUsername').value.trim();
             const emailPassword = document.getElementById('emailPassword').value.trim();
             const fromEmail    = document.getElementById('fromEmail').value.trim();
-            const ignoreTls    = document.getElementById('ignoreTls').checked;
+            const ignoreTls       = document.getElementById('ignoreTls').checked;
+            const disableStarttls = document.getElementById('disableStarttls').checked;
 
             if (!smtpServer) {
                 showToast('Please fill in SMTP Server', 'error');
                 return;
             }
 
-            const payload = { smtpServer, smtpPort, emailUsername, fromEmail, recipients: emailRecipients, ignoreTls };
+            const payload = { smtpServer, smtpPort, emailUsername, fromEmail, recipients: emailRecipients, ignoreTls, disableStarttls };
             if (emailPassword) payload.emailPassword = emailPassword;
 
             try {
@@ -2064,7 +2074,8 @@
                 emailUsername: document.getElementById('emailUsername').value.trim(),
                 fromEmail:     document.getElementById('fromEmail').value.trim(),
                 recipients:    emailRecipients,
-                ignoreTls:     document.getElementById('ignoreTls').checked
+                ignoreTls:        document.getElementById('ignoreTls').checked,
+                disableStarttls:  document.getElementById('disableStarttls').checked
             };
             const pw = document.getElementById('emailPassword').value.trim();
             if (pw) payload.emailPassword = pw;

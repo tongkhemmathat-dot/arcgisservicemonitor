@@ -188,17 +188,31 @@ def _make_ssl_context(ignore_tls: bool):
         ctx.verify_mode = ssl.CERT_NONE
     return ctx
 
+def _smtp_connect(smtp_server, smtp_port, ignore_tls, disable_starttls):
+    """สร้าง SMTP connection ตาม option ที่เลือก และคืน server object (ยังไม่ปิด)"""
+    ctx = _make_ssl_context(ignore_tls)
+    server = smtplib.SMTP(smtp_server, smtp_port, timeout=10)
+    server.ehlo()
+    if not disable_starttls:
+        try:
+            server.starttls(context=ctx)
+            server.ehlo()
+        except smtplib.SMTPException:
+            pass  # server ไม่รองรับ STARTTLS (relay plain mode) — ข้ามได้
+    return server
+
 def send_alert_email(subject, message):
     try:
         data = load_config()
         cfg = data.get("emailConfig", {})
-        smtp_server = cfg.get("smtpServer", "")
-        smtp_port   = int(cfg.get("smtpPort", 587))
-        username    = cfg.get("username", "")
-        password    = decrypt_password(cfg.get("password", ""))
-        from_email  = cfg.get("fromEmail", "") or username
-        recipients  = cfg.get("recipients", [])
-        ignore_tls  = cfg.get("ignoreTls", False)
+        smtp_server      = cfg.get("smtpServer", "")
+        smtp_port        = int(cfg.get("smtpPort", 587))
+        username         = cfg.get("username", "")
+        password         = decrypt_password(cfg.get("password", ""))
+        from_email       = cfg.get("fromEmail", "") or username
+        recipients       = cfg.get("recipients", [])
+        ignore_tls       = cfg.get("ignoreTls", False)
+        disable_starttls = cfg.get("disableStarttls", False)
 
         if not smtp_server or not recipients:
             print(f"[EMAIL SKIP] Not configured. Subject: {subject}")
@@ -210,14 +224,7 @@ def send_alert_email(subject, message):
             f"Subject: {subject}\r\n\r\n"
             f"{message}"
         )
-        ctx = _make_ssl_context(ignore_tls)
-        with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as server:
-            server.ehlo()
-            try:
-                server.starttls(context=ctx)
-                server.ehlo()
-            except smtplib.SMTPException:
-                pass  # server ไม่รองรับ STARTTLS (relay plain mode)
+        with _smtp_connect(smtp_server, smtp_port, ignore_tls, disable_starttls) as server:
             if username and password:
                 server.login(username, password)
             server.sendmail(from_email, recipients, msg.encode("utf-8"))
@@ -534,6 +541,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 safe = {k: v for k, v in cfg.items() if k != "password"}
                 safe["hasPassword"] = bool(cfg.get("password"))
                 safe.setdefault("ignoreTls", False)
+                safe.setdefault("disableStarttls", False)
                 self._send_json(safe)
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
@@ -682,8 +690,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "username":   payload.get("emailUsername", existing.get("username", "")),
                     "fromEmail":  payload.get("fromEmail", existing.get("fromEmail", "")),
                     "recipients": payload.get("recipients", existing.get("recipients", [])),
-                    "ignoreTls":  bool(payload.get("ignoreTls", existing.get("ignoreTls", False))),
-                    "password":   encrypt_password(payload["emailPassword"]) if payload.get("emailPassword") else existing.get("password", "")
+                    "ignoreTls":       bool(payload.get("ignoreTls",       existing.get("ignoreTls",       False))),
+                    "disableStarttls": bool(payload.get("disableStarttls", existing.get("disableStarttls", False))),
+                    "password":        encrypt_password(payload["emailPassword"]) if payload.get("emailPassword") else existing.get("password", "")
                 }
                 data["emailConfig"] = cfg
                 save_config(data)
@@ -710,7 +719,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 password    = payload.get("emailPassword") or decrypt_password(saved.get("password", ""))
                 from_email  = payload.get("fromEmail")     or saved.get("fromEmail", "") or username
                 recipients  = payload.get("recipients")    or saved.get("recipients", [])
-                ignore_tls  = payload.get("ignoreTls",     saved.get("ignoreTls", False))
+                ignore_tls       = payload.get("ignoreTls",       saved.get("ignoreTls",       False))
+                disable_starttls = payload.get("disableStarttls", saved.get("disableStarttls", False))
 
                 if not smtp_server:
                     self._send_json({"success": False, "message": "กรุณาระบุ SMTP Server"}); return
@@ -722,15 +732,16 @@ class RequestHandler(BaseHTTPRequestHandler):
 
                 now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
                 subject = "ArcGIS Monitor — Test Email"
-                auth_mode = f"{username}" if username else "relay (no auth)"
+                auth_mode = username if username else "relay (no auth)"
                 body = (
                     f"This is a test email from ArcGIS Service Monitor.\n\n"
-                    f"SMTP Server : {smtp_server}:{smtp_port}\n"
-                    f"Auth        : {auth_mode}\n"
-                    f"Ignore TLS  : {'yes' if ignore_tls else 'no'}\n"
-                    f"From        : {from_email}\n"
-                    f"To          : {', '.join(recipients)}\n"
-                    f"Sent at     : {now_str}\n\n"
+                    f"SMTP Server    : {smtp_server}:{smtp_port}\n"
+                    f"Auth           : {auth_mode}\n"
+                    f"Ignore TLS     : {'yes' if ignore_tls else 'no'}\n"
+                    f"Disable STARTTLS: {'yes' if disable_starttls else 'no'}\n"
+                    f"From           : {from_email}\n"
+                    f"To             : {', '.join(recipients)}\n"
+                    f"Sent at        : {now_str}\n\n"
                     f"If you received this, email alerts are configured correctly."
                 )
                 msg = (
@@ -741,14 +752,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 )
 
                 try:
-                    ctx = _make_ssl_context(ignore_tls)
-                    with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as server:
-                        server.ehlo()
-                        try:
-                            server.starttls(context=ctx)
-                            server.ehlo()
-                        except smtplib.SMTPException:
-                            pass  # relay / server ไม่รองรับ STARTTLS
+                    with _smtp_connect(smtp_server, smtp_port, ignore_tls, disable_starttls) as server:
                         if username and password:
                             server.login(username, password)
                         server.sendmail(from_email, recipients, msg.encode("utf-8"))
@@ -820,7 +824,8 @@ if __name__ == "__main__":
                 "smtpServer": "", "smtpPort": 587,
                 "username": "", "password": "",
                 "fromEmail": "", "recipients": [],
-                "ignoreTls": False
+                "ignoreTls": False,
+                "disableStarttls": False
             }
         }
         with open(CONFIG_PATH, "w") as f:

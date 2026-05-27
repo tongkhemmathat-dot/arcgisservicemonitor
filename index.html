@@ -981,8 +981,12 @@
     </div>
 
     <script>
-        // When served via IIS use relative path (proxied); when opened as file use localhost directly
-        const API = location.protocol === 'file:' ? 'http://localhost:8000' : '';
+        // file://  → ชี้ตรง backend
+        // subpath  → ใช้ path นำหน้า เช่น /arcgis-monitor
+        // root     → ใช้ '' (IIS / nginx serve ที่ /)
+        const API = location.protocol === 'file:'
+            ? 'http://localhost:8000'
+            : location.pathname.replace(/\/(index\.html)?$/, '').replace(/\/$/, '');
         let refreshInterval;
         let currentEditId = null;
         const liveHistory = {};   // {serviceId: [pingMs, ...]} — in-memory only

@@ -640,6 +640,28 @@
             box-shadow: 0 0 10px rgba(0, 200, 255, 0.1);
         }
 
+        select.form-input {
+            appearance: none;
+            -webkit-appearance: none;
+            background-color: rgba(10, 22, 45, 0.95);
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2300c8ff' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 32px;
+        }
+
+        select.form-input option {
+            background-color: #0a1628;
+            color: #e0e6f0;
+        }
+
+        select.form-input option:hover,
+        select.form-input option:focus,
+        select.form-input option:checked {
+            background-color: rgba(0, 200, 255, 0.15);
+            color: #00c8ff;
+        }
+
         .form-input::placeholder {
             color: var(--text-muted);
         }

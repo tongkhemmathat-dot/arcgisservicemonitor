@@ -1,12 +1,10 @@
 .git
 .env
 encryption.key
-*.bat
-web.config
 config.json
 !config.demo.json
-nginx/
-docker-compose*.yml
+windows/
+docker/
 *.tmp
 __pycache__
 *.pyc

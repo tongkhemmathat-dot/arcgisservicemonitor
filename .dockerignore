@@ -1,4 +1,5 @@
 .git
+.env
 *.bat
 web.config
 config.json

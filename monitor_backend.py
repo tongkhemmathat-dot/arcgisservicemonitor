@@ -14,7 +14,51 @@ import os
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.environ.get("CONFIG_PATH", os.path.join(_BASE_DIR, "config.json"))
 
+# ---------------------------------------------------------------------------
+# Password encryption (Fernet / AES-128-CBC)
+# Set ENCRYPTION_KEY env var to a Fernet key to enable.
+# Generate a key:  python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# ---------------------------------------------------------------------------
+_ENC_PREFIX = "enc:"
+try:
+    from cryptography.fernet import Fernet, InvalidToken
+    _raw_key = os.environ.get("ENCRYPTION_KEY", "").strip()
+    if _raw_key:
+        _fernet = Fernet(_raw_key.encode())
+        print("[CRYPTO] Password encryption enabled.")
+    else:
+        _fernet = None
+        print("[CRYPTO] WARNING: ENCRYPTION_KEY not set — passwords stored as plain text.")
+except Exception as _e:
+    _fernet = None
+    print(f"[CRYPTO] cryptography library unavailable ({_e}) — passwords stored as plain text.")
+
+def encrypt_password(plain: str) -> str:
+    if not plain or not _fernet:
+        return plain
+    return _ENC_PREFIX + _fernet.encrypt(plain.encode()).decode()
+
+def decrypt_password(stored: str) -> str:
+    if not stored:
+        return stored
+    if stored.startswith(_ENC_PREFIX):
+        if not _fernet:
+            print("[CRYPTO] ERROR: encrypted password found but ENCRYPTION_KEY is not set.")
+            return ""
+        try:
+            return _fernet.decrypt(stored[len(_ENC_PREFIX):].encode()).decode()
+        except Exception:
+            print("[CRYPTO] ERROR: failed to decrypt password — wrong key?")
+            return ""
+    return stored  # plain text (stored before encryption was enabled)
+
+def redact_password(stored: str) -> str:
+    """Return masked value for API responses — never expose raw or encrypted bytes."""
+    return "********" if stored else ""
+
+# ---------------------------------------------------------------------------
 # Token cache: {(token_url, username): (token_str, expires_epoch)}
+# ---------------------------------------------------------------------------
 _token_cache = {}
 _token_lock = threading.Lock()
 
@@ -86,7 +130,7 @@ def send_alert_email(subject, message):
         smtp_server = cfg.get("smtpServer", "")
         smtp_port = int(cfg.get("smtpPort", 587))
         username = cfg.get("username", "")
-        password = cfg.get("password", "")
+        password = decrypt_password(cfg.get("password", ""))
         from_email = cfg.get("fromEmail", username)
         recipients = cfg.get("recipients", [])
 
@@ -126,7 +170,7 @@ def check_services(manual_trigger=False):
             continue
 
         username = service.get("username", "")
-        password = service.get("password", "")
+        password = decrypt_password(service.get("password", ""))
 
         # Build check URL — append token if credentials provided
         sep = "&" if "?" in url else "?"
@@ -258,7 +302,7 @@ def quick_ping(service):
         return {"id": service.get("id"), "pingMs": None, "status": "Offline"}
 
     username = service.get("username", "")
-    password = service.get("password", "")
+    password = decrypt_password(service.get("password", ""))
     sep = "&" if "?" in url else "?"
     check_url = url + sep + "f=json"
 
@@ -315,14 +359,11 @@ class RequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/api/monitor/dashboard":
             try:
-                with open(CONFIG_PATH, "r") as f:
-                    body = f.read().encode("utf-8")
-                self.send_response(200)
-                self._send_cors_headers()
-                self.send_header("Content-Type", "application/json; charset=utf-8")
-                self.send_header("Content-Length", len(body))
-                self.end_headers()
-                self.wfile.write(body)
+                data = load_config()
+                # Redact passwords — never expose plain text or encrypted bytes to the UI
+                for svc in data.get("services", []):
+                    svc["password"] = redact_password(svc.get("password", ""))
+                self._send_json(data)
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
 
@@ -402,7 +443,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "serviceType": payload.get("type", "MapServer"),
                     "url": url,
                     "username": payload.get("username", ""),
-                    "password": payload.get("password", ""),
+                    "password": encrypt_password(payload.get("password", "")),
                     "status": "Unknown",
                     "pingMs": None,
                     "pingHistory": [],
@@ -412,7 +453,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 data["services"] = services
                 data["stats"]["total"] = len(services)
                 save_config(data)
-                self._send_json({"success": True, "service": new_service})
+                safe_service = {**new_service, "password": redact_password(new_service["password"])}
+                self._send_json({"success": True, "service": safe_service})
 
             elif self.path == "/api/monitor/update":
                 payload = self._read_json_body()
@@ -429,7 +471,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                         if "username" in payload:
                             svc["username"] = payload["username"]
                         if payload.get("password"):
-                            svc["password"] = payload["password"]
+                            svc["password"] = encrypt_password(payload["password"])
                         updated = True
                         break
                 if not updated:
@@ -461,7 +503,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "username": payload.get("emailUsername", existing.get("username", "")),
                     "fromEmail": payload.get("fromEmail", existing.get("fromEmail", "")),
                     "recipients": payload.get("recipients", existing.get("recipients", [])),
-                    "password": payload["emailPassword"] if payload.get("emailPassword") else existing.get("password", "")
+                    "password": encrypt_password(payload["emailPassword"]) if payload.get("emailPassword") else existing.get("password", "")
                 }
                 data["emailConfig"] = cfg
                 save_config(data)
@@ -483,7 +525,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 smtp_server  = payload.get("smtpServer")  or saved.get("smtpServer", "")
                 smtp_port    = int(payload.get("smtpPort") or saved.get("smtpPort", 587))
                 username     = payload.get("emailUsername") or saved.get("username", "")
-                password     = payload.get("emailPassword") or saved.get("password", "")
+                password     = payload.get("emailPassword") or decrypt_password(saved.get("password", ""))
                 from_email   = payload.get("fromEmail")   or saved.get("fromEmail", username)
                 recipients   = payload.get("recipients")  or saved.get("recipients", [])
 

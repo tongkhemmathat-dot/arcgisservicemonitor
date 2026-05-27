@@ -1,5 +1,6 @@
-# Config contains credentials — never commit the real one
+# Config and secrets — never commit
 config.json
+.env
 
 # Logs
 logs/

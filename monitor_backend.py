@@ -181,18 +181,26 @@ def save_config(data):
         json.dump(data, f, indent=2)
     os.replace(temp_path, CONFIG_PATH)
 
+def _make_ssl_context(ignore_tls: bool):
+    ctx = ssl.create_default_context()
+    if ignore_tls:
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+    return ctx
+
 def send_alert_email(subject, message):
     try:
         data = load_config()
         cfg = data.get("emailConfig", {})
         smtp_server = cfg.get("smtpServer", "")
-        smtp_port = int(cfg.get("smtpPort", 587))
-        username = cfg.get("username", "")
-        password = decrypt_password(cfg.get("password", ""))
-        from_email = cfg.get("fromEmail", username)
-        recipients = cfg.get("recipients", [])
+        smtp_port   = int(cfg.get("smtpPort", 587))
+        username    = cfg.get("username", "")
+        password    = decrypt_password(cfg.get("password", ""))
+        from_email  = cfg.get("fromEmail", "") or username
+        recipients  = cfg.get("recipients", [])
+        ignore_tls  = cfg.get("ignoreTls", False)
 
-        if not smtp_server or not username or not recipients:
+        if not smtp_server or not recipients:
             print(f"[EMAIL SKIP] Not configured. Subject: {subject}")
             return False
 
@@ -202,9 +210,16 @@ def send_alert_email(subject, message):
             f"Subject: {subject}\r\n\r\n"
             f"{message}"
         )
-        with smtplib.SMTP(smtp_server, smtp_port) as server:
-            server.starttls(context=ssl.create_default_context())
-            server.login(username, password)
+        ctx = _make_ssl_context(ignore_tls)
+        with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as server:
+            server.ehlo()
+            try:
+                server.starttls(context=ctx)
+                server.ehlo()
+            except smtplib.SMTPException:
+                pass  # server ไม่รองรับ STARTTLS (relay plain mode)
+            if username and password:
+                server.login(username, password)
             server.sendmail(from_email, recipients, msg.encode("utf-8"))
         print(f"[EMAIL SENT] {subject}")
         return True
@@ -518,6 +533,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 cfg = data.get("emailConfig", {})
                 safe = {k: v for k, v in cfg.items() if k != "password"}
                 safe["hasPassword"] = bool(cfg.get("password"))
+                safe.setdefault("ignoreTls", False)
                 self._send_json(safe)
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
@@ -662,11 +678,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                 existing = data.get("emailConfig", {})
                 cfg = {
                     "smtpServer": payload.get("smtpServer", existing.get("smtpServer", "")),
-                    "smtpPort": int(payload.get("smtpPort", existing.get("smtpPort", 587))),
-                    "username": payload.get("emailUsername", existing.get("username", "")),
-                    "fromEmail": payload.get("fromEmail", existing.get("fromEmail", "")),
+                    "smtpPort":   int(payload.get("smtpPort", existing.get("smtpPort", 587))),
+                    "username":   payload.get("emailUsername", existing.get("username", "")),
+                    "fromEmail":  payload.get("fromEmail", existing.get("fromEmail", "")),
                     "recipients": payload.get("recipients", existing.get("recipients", [])),
-                    "password": encrypt_password(payload["emailPassword"]) if payload.get("emailPassword") else existing.get("password", "")
+                    "ignoreTls":  bool(payload.get("ignoreTls", existing.get("ignoreTls", False))),
+                    "password":   encrypt_password(payload["emailPassword"]) if payload.get("emailPassword") else existing.get("password", "")
                 }
                 data["emailConfig"] = cfg
                 save_config(data)
@@ -687,27 +704,30 @@ class RequestHandler(BaseHTTPRequestHandler):
                 data = load_config()
                 saved = data.get("emailConfig", {})
 
-                smtp_server  = payload.get("smtpServer")  or saved.get("smtpServer", "")
-                smtp_port    = int(payload.get("smtpPort") or saved.get("smtpPort", 587))
-                username     = payload.get("emailUsername") or saved.get("username", "")
-                password     = payload.get("emailPassword") or decrypt_password(saved.get("password", ""))
-                from_email   = payload.get("fromEmail")   or saved.get("fromEmail", username)
-                recipients   = payload.get("recipients")  or saved.get("recipients", [])
+                smtp_server = payload.get("smtpServer")    or saved.get("smtpServer", "")
+                smtp_port   = int(payload.get("smtpPort")  or saved.get("smtpPort", 587))
+                username    = payload.get("emailUsername") or saved.get("username", "")
+                password    = payload.get("emailPassword") or decrypt_password(saved.get("password", ""))
+                from_email  = payload.get("fromEmail")     or saved.get("fromEmail", "") or username
+                recipients  = payload.get("recipients")    or saved.get("recipients", [])
+                ignore_tls  = payload.get("ignoreTls",     saved.get("ignoreTls", False))
 
                 if not smtp_server:
                     self._send_json({"success": False, "message": "กรุณาระบุ SMTP Server"}); return
-                if not username:
-                    self._send_json({"success": False, "message": "กรุณาระบุ Email Username"}); return
-                if not password:
-                    self._send_json({"success": False, "message": "กรุณาระบุ Password (หรือบันทึก config ก่อน)"}); return
                 if not recipients:
-                    recipients = [from_email or username]
+                    if from_email:
+                        recipients = [from_email]
+                    else:
+                        self._send_json({"success": False, "message": "กรุณาระบุ Recipients หรือ From Email"}); return
 
                 now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
                 subject = "ArcGIS Monitor — Test Email"
+                auth_mode = f"{username}" if username else "relay (no auth)"
                 body = (
                     f"This is a test email from ArcGIS Service Monitor.\n\n"
                     f"SMTP Server : {smtp_server}:{smtp_port}\n"
+                    f"Auth        : {auth_mode}\n"
+                    f"Ignore TLS  : {'yes' if ignore_tls else 'no'}\n"
                     f"From        : {from_email}\n"
                     f"To          : {', '.join(recipients)}\n"
                     f"Sent at     : {now_str}\n\n"
@@ -721,11 +741,16 @@ class RequestHandler(BaseHTTPRequestHandler):
                 )
 
                 try:
+                    ctx = _make_ssl_context(ignore_tls)
                     with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as server:
                         server.ehlo()
-                        server.starttls(context=ssl.create_default_context())
-                        server.ehlo()
-                        server.login(username, password)
+                        try:
+                            server.starttls(context=ctx)
+                            server.ehlo()
+                        except smtplib.SMTPException:
+                            pass  # relay / server ไม่รองรับ STARTTLS
+                        if username and password:
+                            server.login(username, password)
                         server.sendmail(from_email, recipients, msg.encode("utf-8"))
                     self._send_json({
                         "success": True,
@@ -794,7 +819,8 @@ if __name__ == "__main__":
             "emailConfig": {
                 "smtpServer": "", "smtpPort": 587,
                 "username": "", "password": "",
-                "fromEmail": "", "recipients": []
+                "fromEmail": "", "recipients": [],
+                "ignoreTls": False
             }
         }
         with open(CONFIG_PATH, "w") as f:

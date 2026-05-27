@@ -1281,28 +1281,38 @@
                     <div class="modal-section-title">Email Server Configuration</div>
 
                     <div class="form-group">
-                        <label class="form-label">SMTP Server</label>
-                        <input type="text" id="smtpServer" class="form-input" placeholder="e.g., smtp.gmail.com" />
+                        <label class="form-label">SMTP Server <span style="color:var(--neon-red)">*</span></label>
+                        <input type="text" id="smtpServer" class="form-input" placeholder="e.g., 192.168.1.10 หรือ smtp.gmail.com" />
                     </div>
 
                     <div class="form-group">
                         <label class="form-label">SMTP Port</label>
-                        <input type="number" id="smtpPort" class="form-input" placeholder="587 (TLS) or 465 (SSL)" value="587" />
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Email Username</label>
-                        <input type="email" id="emailUsername" class="form-input" placeholder="e.g., your-email@gmail.com" />
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Email Password</label>
-                        <input type="password" id="emailPassword" class="form-input" placeholder="Your email password or app password" />
+                        <input type="number" id="smtpPort" class="form-input" placeholder="25 / 587 (TLS) / 465 (SSL)" value="587" />
                     </div>
 
                     <div class="form-group">
                         <label class="form-label">From Email Address</label>
-                        <input type="email" id="fromEmail" class="form-input" placeholder="e.g., alerts@company.com" />
+                        <input type="email" id="fromEmail" class="form-input" placeholder="e.g., monitor@company.com" />
+                    </div>
+
+                    <div class="modal-section-title">Authentication <span style="font-size:10px; font-weight:400; color:var(--text-muted); text-transform:none; letter-spacing:0;">(optional — leave blank for relay)</span></div>
+
+                    <div class="form-group">
+                        <label class="form-label">Username</label>
+                        <input type="text" id="emailUsername" class="form-input" placeholder="เว้นว่างสำหรับ relay mail (ไม่ต้อง auth)" />
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Password</label>
+                        <input type="password" id="emailPassword" class="form-input" placeholder="เว้นว่างสำหรับ relay mail" />
+                    </div>
+
+                    <div class="form-group" style="flex-direction:row; align-items:center; gap:10px; padding:10px 14px; background:rgba(255,201,64,0.05); border:1px solid rgba(255,201,64,0.15); border-radius:6px;">
+                        <input type="checkbox" id="ignoreTls" style="width:16px; height:16px; accent-color:var(--neon-yellow); cursor:pointer; flex-shrink:0;" />
+                        <div>
+                            <label for="ignoreTls" class="form-label" style="cursor:pointer; margin:0;">Ignore TLS / SSL Errors</label>
+                            <div class="form-hint" style="margin-top:2px;">ข้ามการตรวจสอบ certificate — ใช้สำหรับ self-signed cert หรือ internal relay</div>
+                        </div>
                     </div>
 
                     <div class="modal-section-title">Alert Recipients</div>
@@ -1961,8 +1971,9 @@
                 document.getElementById('emailPassword').value = '';
                 document.getElementById('emailPassword').placeholder = cfg.hasPassword
                     ? '(password saved — enter new to change)'
-                    : 'Your email password or app password';
+                    : 'เว้นว่างสำหรับ relay mail';
                 document.getElementById('fromEmail').value = cfg.fromEmail || '';
+                document.getElementById('ignoreTls').checked = cfg.ignoreTls || false;
                 emailRecipients = cfg.recipients || [];
                 renderRecipients();
             } catch (e) {
@@ -2005,18 +2016,19 @@
         }
 
         async function saveEmailConfig() {
-            const smtpServer = document.getElementById('smtpServer').value.trim();
-            const smtpPort = document.getElementById('smtpPort').value.trim();
+            const smtpServer   = document.getElementById('smtpServer').value.trim();
+            const smtpPort     = document.getElementById('smtpPort').value.trim();
             const emailUsername = document.getElementById('emailUsername').value.trim();
             const emailPassword = document.getElementById('emailPassword').value.trim();
-            const fromEmail = document.getElementById('fromEmail').value.trim();
+            const fromEmail    = document.getElementById('fromEmail').value.trim();
+            const ignoreTls    = document.getElementById('ignoreTls').checked;
 
-            if (!smtpServer || !emailUsername || !fromEmail) {
-                showToast('Please fill in SMTP Server, Username, and From Email', 'error');
+            if (!smtpServer) {
+                showToast('Please fill in SMTP Server', 'error');
                 return;
             }
 
-            const payload = { smtpServer, smtpPort, emailUsername, fromEmail, recipients: emailRecipients };
+            const payload = { smtpServer, smtpPort, emailUsername, fromEmail, recipients: emailRecipients, ignoreTls };
             if (emailPassword) payload.emailPassword = emailPassword;
 
             try {
@@ -2028,8 +2040,10 @@
                 const result = await response.json();
                 if (!result.success) throw new Error(result.error || 'Save failed');
                 showToast('Email configuration saved', 'success');
-                document.getElementById('emailPassword').value = '';
-                document.getElementById('emailPassword').placeholder = '(password saved — enter new to change)';
+                if (emailPassword) {
+                    document.getElementById('emailPassword').value = '';
+                    document.getElementById('emailPassword').placeholder = '(password saved — enter new to change)';
+                }
             } catch (e) {
                 showToast(`Failed to save: ${e.message}`, 'error');
             }
@@ -2049,7 +2063,8 @@
                 smtpPort:      document.getElementById('smtpPort').value.trim(),
                 emailUsername: document.getElementById('emailUsername').value.trim(),
                 fromEmail:     document.getElementById('fromEmail').value.trim(),
-                recipients:    emailRecipients
+                recipients:    emailRecipients,
+                ignoreTls:     document.getElementById('ignoreTls').checked
             };
             const pw = document.getElementById('emailPassword').value.trim();
             if (pw) payload.emailPassword = pw;

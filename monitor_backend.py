@@ -11,7 +11,8 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 import os
 
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_PATH = os.environ.get("CONFIG_PATH", os.path.join(_BASE_DIR, "config.json"))
 
 # Token cache: {(token_url, username): (token_str, expires_epoch)}
 _token_cache = {}
@@ -366,6 +367,19 @@ class RequestHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
 
+        elif self.path in ("/", "/index.html"):
+            index_path = os.path.join(_BASE_DIR, "index.html")
+            try:
+                with open(index_path, "rb") as f:
+                    body = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", len(body))
+                self.end_headers()
+                self.wfile.write(body)
+            except FileNotFoundError:
+                self._send_json({"error": "index.html not found"}, 404)
+
         else:
             self._send_json({"error": "Not Found"}, 404)
 
@@ -546,9 +560,11 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "Not Found"}, 404)
 
 
-def run_server(host="127.0.0.1", port=8000):
+def run_server():
+    host = os.environ.get("HOST", "127.0.0.1")
+    port = int(os.environ.get("PORT", "8000"))
     httpd = ThreadingHTTPServer((host, port), RequestHandler)
-    print(f"ArcGIS Monitor backend running at http://{host}:{port}")
+    print(f"ArcGIS Monitor running at http://{host}:{port}")
     print(f"Config file: {CONFIG_PATH}")
     httpd.serve_forever()
 

@@ -1,0 +1,10 @@
+.git
+*.bat
+web.config
+config.json
+nginx/
+docker-compose*.yml
+*.tmp
+__pycache__
+*.pyc
+*.md

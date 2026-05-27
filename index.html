@@ -353,18 +353,33 @@
             transition: width 0.3s ease;
         }
 
+        .sparkline-wrapper {
+            margin-top: 2px;
+        }
+
         .sparkline {
             display: flex;
             align-items: flex-end;
             height: 12px;
             gap: 1px;
-            margin-top: 2px;
         }
 
         .spark-bar {
             flex: 1;
             min-height: 1px;
             transition: height 0.4s ease, background-color 0.4s ease;
+        }
+
+        .spark-timeline {
+            display: flex;
+            justify-content: space-between;
+            font-family: var(--font-tech);
+            font-size: 9px;
+            color: var(--text-muted);
+            opacity: 0.55;
+            margin-top: 3px;
+            padding: 0 1px;
+            letter-spacing: 0.02em;
         }
 
         .last-checked {
@@ -1013,6 +1028,7 @@
             : location.pathname.replace(/\/(index\.html)?$/, '').replace(/\/$/, '');
         let refreshInterval;
         let currentEditId = null;
+        let globalCheckInterval = 15;  // นาที — อัปเดตจาก dashboard response
         const liveHistory = {};   // {serviceId: [pingMs, ...]} — in-memory only
         const LIVE_MAX = 30;      // keep last 30 live points
         let emailRecipients = [];
@@ -1071,7 +1087,8 @@
             renderServices(data.services);
             renderAlerts(data.recentAlerts);
             // Set next check countdown from serverTime + interval
-            const intervalMs = (data.checkIntervalMinutes || 15) * 60 * 1000;
+            globalCheckInterval = data.checkIntervalMinutes || 15;
+            const intervalMs = globalCheckInterval * 60 * 1000;
             const base = data.serverTime ? new Date(data.serverTime).getTime() : Date.now();
             nextCheckEpoch = base + intervalMs;
             updateNextCheckDisplay();
@@ -1106,7 +1123,7 @@
                 if (history.length > 0) {
                     const posValues = history.filter(p => p > 0);
                     const maxPing = posValues.length ? Math.max(...posValues, 100) : 1000;
-                    sparklineHtml = '<div class="sparkline">';
+                    sparklineHtml = '<div class="sparkline-wrapper"><div class="sparkline">';
                     history.forEach((p, idx) => {
                         const val = p === null ? 0 : p;
                         const isOffline = val === 0;
@@ -1121,6 +1138,18 @@
                         sparklineHtml += `<div class="spark-bar" style="height:${heightPct}%;background-color:${sColor};opacity:${opacity};" title="${isOffline ? 'Offline' : val + 'ms'}"></div>`;
                     });
                     sparklineHtml += '</div>';
+
+                    // เส้นเวลาใต้กราฟ
+                    const svcInterval = svc.checkIntervalMinutes || globalCheckInterval;
+                    if (svc.lastChecked && history.length >= 2) {
+                        const newest   = new Date(svc.lastChecked);
+                        const oldest   = new Date(newest.getTime() - (history.length - 1) * svcInterval * 60000);
+                        const midIdx   = Math.floor((history.length - 1) / 2);
+                        const mid      = new Date(newest.getTime() - midIdx * svcInterval * 60000);
+                        const fmt      = d => d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false });
+                        sparklineHtml += `<div class="spark-timeline"><span>${fmt(oldest)}</span><span>${fmt(mid)}</span><span>${fmt(newest)}</span></div>`;
+                    }
+                    sparklineHtml += '</div>'; // .sparkline-wrapper
                 }
                 const timeStr = svc.lastChecked ? new Date(svc.lastChecked).toLocaleTimeString('en-US', { hour12: false }) : '--:--:--';
                 html += `

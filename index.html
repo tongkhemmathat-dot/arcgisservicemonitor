@@ -205,10 +205,40 @@
             line-height: 1;
         }
 
+        .stat-card .sub-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 8px;
+            font-family: var(--font-tech);
+            letter-spacing: 0.03em;
+        }
+
         .stat-card.online .value { color: var(--neon-green); }
         .stat-card.offline .value { color: var(--neon-red); }
         .stat-card.slow .value { color: var(--neon-yellow); }
         .stat-card.total .value { color: var(--neon-blue); }
+
+        /* Pulse animation for offline count when > 0 */
+        @keyframes offlinePulse {
+            0%   { text-shadow: 0 0 6px rgba(255,59,92,0.6); }
+            50%  { text-shadow: 0 0 18px rgba(255,59,92,0.9), 0 0 30px rgba(255,59,92,0.4); }
+            100% { text-shadow: 0 0 6px rgba(255,59,92,0.6); }
+        }
+        .stat-card.offline .value.has-issues {
+            animation: offlinePulse 2s ease-in-out infinite;
+        }
+
+        /* Stat card glow on hover */
+        .stat-card {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+        .stat-card.online:hover  { box-shadow: 0 4px 20px rgba(0,232,122,0.15); }
+        .stat-card.offline:hover { box-shadow: 0 4px 20px rgba(255,59,92,0.15); }
+        .stat-card.slow:hover    { box-shadow: 0 4px 20px rgba(255,201,64,0.15); }
+        .stat-card.total:hover   { box-shadow: 0 4px 20px rgba(0,200,255,0.15); }
 
         /* Main Content Grid */
         .main-content {
@@ -239,7 +269,7 @@
         }
 
         .panel-body {
-            padding: 20px;
+            padding: 16px;
             overflow-y: auto;
             max-height: 600px;
         }
@@ -248,7 +278,7 @@
         .services-list {
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 7px;
         }
         
         .service-row {
@@ -256,15 +286,27 @@
             grid-template-columns: 30px 2fr 100px 100px 1fr 100px;
             align-items: center;
             gap: 15px;
-            padding: 12px 15px;
+            padding: 10px 15px;
             background: rgba(30, 45, 74, 0.2);
             border: 1px solid rgba(30, 45, 74, 0.5);
             border-radius: 6px;
-            transition: background 0.2s;
+            transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+            cursor: default;
         }
 
         .service-row:hover {
-            background: rgba(30, 45, 74, 0.4);
+            background: rgba(30, 45, 74, 0.45);
+            border-color: rgba(0,200,255,0.18);
+            box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+        }
+
+        .status-Offline .service-row,
+        .service-row.status-Offline {
+            border-left: 2px solid var(--neon-red);
+        }
+        .status-Slow .service-row,
+        .service-row.status-Slow {
+            border-left: 2px solid var(--neon-yellow);
         }
 
         .status-dot-container {
@@ -393,45 +435,66 @@
         .tag-chip {
             display: inline-flex;
             align-items: center;
-            gap: 4px;
-            padding: 2px 8px;
+            gap: 3px;
+            padding: 1px 7px;
             border-radius: 20px;
             font-size: 10px;
             font-family: var(--font-ui);
             font-weight: 600;
-            letter-spacing: 0.04em;
+            letter-spacing: 0.03em;
             border: 1px solid;
             cursor: default;
             white-space: nowrap;
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .tag-chip.removable { cursor: pointer; }
         .tag-chip.removable:hover { opacity: 0.75; }
+        .tag-chip-more {
+            display: inline-flex;
+            align-items: center;
+            padding: 1px 7px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-family: var(--font-tech);
+            font-weight: 600;
+            background: rgba(74,96,128,0.15);
+            border: 1px solid rgba(74,96,128,0.35);
+            color: var(--text-muted);
+            cursor: default;
+            white-space: nowrap;
+        }
 
         .service-tags {
             display: flex;
             flex-wrap: wrap;
-            gap: 4px;
+            gap: 3px;
             margin-top: 4px;
+            align-items: center;
         }
 
         /* ─── Filter bar ────────────────────────── */
         .tag-filter-bar {
             display: flex;
             flex-wrap: wrap;
-            gap: 6px;
-            padding: 10px 16px 6px;
+            gap: 5px;
+            padding: 8px 16px;
             border-bottom: 1px solid var(--panel-border);
             align-items: center;
+            background: rgba(0,0,0,0.15);
         }
         .tag-filter-bar-label {
-            font-size: 10px;
+            font-size: 9px;
             font-family: var(--font-tech);
             color: var(--text-muted);
-            margin-right: 2px;
-            letter-spacing: 0.06em;
+            margin-right: 4px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            opacity: 0.7;
         }
         .filter-chip {
-            padding: 3px 10px;
+            padding: 2px 9px;
             border-radius: 20px;
             font-size: 11px;
             font-family: var(--font-ui);
@@ -441,28 +504,54 @@
             color: var(--text-muted);
             cursor: pointer;
             transition: all 0.18s;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
         }
         .filter-chip:hover { border-color: var(--neon-blue); color: var(--neon-blue); }
         .filter-chip.active {
-            background: rgba(0,200,255,0.15);
+            background: rgba(0,200,255,0.12);
             border-color: var(--neon-blue);
             color: var(--neon-blue);
         }
-        .view-toggle-btn {
-            padding: 3px 8px;
-            border-radius: 4px;
-            font-size: 13px;
+        .filter-chip .chip-count {
+            font-family: var(--font-tech);
+            font-size: 9px;
+            opacity: 0.75;
+            background: rgba(255,255,255,0.08);
+            padding: 0 4px;
+            border-radius: 8px;
+            line-height: 1.5;
+        }
+        .filter-chip.active .chip-count {
+            background: rgba(0,200,255,0.2);
+        }
+
+        /* ─── View toggle — segmented control ───── */
+        .view-toggle-group {
+            display: flex;
             border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .view-toggle-btn {
+            padding: 4px 12px;
+            font-size: 12px;
+            font-family: var(--font-ui);
+            font-weight: 500;
+            border: none;
+            border-right: 1px solid var(--panel-border);
             background: transparent;
             color: var(--text-muted);
             cursor: pointer;
-            transition: all 0.18s;
-            margin-left: auto;
+            transition: all 0.15s;
+            white-space: nowrap;
         }
+        .view-toggle-btn:last-child { border-right: none; }
+        .view-toggle-btn:hover { color: var(--text-main); background: rgba(255,255,255,0.04); }
         .view-toggle-btn.active {
-            border-color: var(--neon-blue);
+            background: rgba(0,200,255,0.12);
             color: var(--neon-blue);
-            background: rgba(0,200,255,0.1);
         }
 
         /* ─── Group header ──────────────────────── */
@@ -540,40 +629,59 @@
 
         .alert-item {
             background: rgba(30, 45, 74, 0.2);
-            border-radius: 4px;
-            padding: 12px;
+            border-radius: 6px;
+            padding: 10px 12px;
             border-left: 3px solid transparent;
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 5px;
+            transition: background 0.15s;
         }
+        .alert-item:hover { background: rgba(30,45,74,0.35); }
 
-        .alert-item.Recovery { border-left-color: var(--neon-green); }
-        .alert-item.Critical { border-left-color: var(--neon-red); }
-        .alert-item.Warning { border-left-color: var(--neon-yellow); }
-        .alert-item.Info { border-left-color: var(--neon-blue); }
+        .alert-item.Recovery {
+            border-left-color: var(--neon-green);
+            background: rgba(0,232,122,0.04);
+        }
+        .alert-item.Critical {
+            border-left-color: var(--neon-red);
+            background: rgba(255,59,92,0.05);
+        }
+        .alert-item.Warning {
+            border-left-color: var(--neon-yellow);
+            background: rgba(255,201,64,0.04);
+        }
+        .alert-item.Info {
+            border-left-color: var(--neon-blue);
+            background: rgba(0,200,255,0.04);
+        }
 
         .alert-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 8px;
         }
 
         .alert-time {
             font-family: var(--font-tech);
             font-size: 10px;
             color: var(--text-muted);
+            white-space: nowrap;
         }
 
         .alert-service {
             font-size: 12px;
-            font-weight: 500;
+            font-weight: 600;
             color: #fff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .alert-message {
-            font-size: 12px;
-            color: var(--text-main);
+            font-size: 11px;
+            color: var(--text-muted);
             line-height: 1.4;
         }
 
@@ -583,15 +691,36 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 40px 20px;
+            padding: 48px 20px;
             color: var(--text-muted);
             text-align: center;
-            gap: 15px;
+            gap: 12px;
         }
 
         .empty-state .icon {
-            font-size: 32px;
-            opacity: 0.5;
+            font-size: 36px;
+            opacity: 0.4;
+        }
+
+        .empty-state .title {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+
+        .empty-state .hint {
+            font-size: 12px;
+            color: var(--text-muted);
+            opacity: 0.7;
+            font-family: var(--font-tech);
+        }
+
+        @keyframes loadingPulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 0.8; }
+        }
+        .empty-state.loading .icon {
+            animation: loadingPulse 1.2s ease-in-out infinite;
         }
 
         /* Toast Notifications */
@@ -884,6 +1013,92 @@
             opacity: 0.5;
             cursor: not-allowed;
         }
+
+        /* ─── Modal section separator ────────── */
+        .modal-section-title {
+            color: var(--neon-blue);
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            margin-top: 24px;
+            margin-bottom: 14px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(0,200,255,0.12);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .modal-section-title:first-child { margin-top: 0; }
+        .modal-section-title::before {
+            content: '';
+            display: inline-block;
+            width: 3px;
+            height: 14px;
+            background: var(--neon-blue);
+            border-radius: 2px;
+            box-shadow: 0 0 6px rgba(0,200,255,0.5);
+        }
+
+        /* ─── Form group compact ─────────────── */
+        .form-hint {
+            margin-top: 5px;
+            font-size: 11px;
+            color: var(--text-muted);
+            font-family: var(--font-tech);
+            line-height: 1.4;
+        }
+
+        /* ─── Interval display box ───────────── */
+        .interval-display-box {
+            background: rgba(0,200,255,0.05);
+            border: 1px solid rgba(0,200,255,0.15);
+            border-radius: 6px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+        }
+        .interval-display-box .idl-label {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+            font-family: var(--font-tech);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .interval-display-box .idl-value {
+            font-family: var(--font-tech);
+            font-size: 22px;
+            color: var(--neon-blue);
+        }
+
+        /* ─── Panel header title ─────────────── */
+        .panel-header-title {
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            color: var(--text-main);
+        }
+
+        /* ─── Service row status border left ─── */
+        .service-row.status-Offline { border-left: 2px solid rgba(255,59,92,0.6); }
+        .service-row.status-Slow    { border-left: 2px solid rgba(255,201,64,0.5); }
+
+        /* ─── Stat card bar indicator ─────────── */
+        .stat-card .stat-bar {
+            margin-top: 10px;
+            height: 3px;
+            border-radius: 2px;
+            background: rgba(255,255,255,0.06);
+            overflow: hidden;
+        }
+        .stat-card .stat-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.6s ease;
+        }
+        .stat-card.online .stat-bar-fill  { background: var(--neon-green); }
+        .stat-card.offline .stat-bar-fill { background: var(--neon-red); }
+        .stat-card.slow .stat-bar-fill    { background: var(--neon-yellow); }
+        .stat-card.total .stat-bar-fill   { background: var(--neon-blue); }
     </style>
 </head>
 <body>
@@ -918,18 +1133,22 @@
             <div class="stat-card online">
                 <div class="label">Online Services</div>
                 <div class="value" id="stat-online">-</div>
+                <div class="stat-bar"><div class="stat-bar-fill" id="stat-bar-online" style="width:0%"></div></div>
             </div>
             <div class="stat-card offline">
                 <div class="label">Offline / Error</div>
                 <div class="value" id="stat-offline">-</div>
+                <div class="stat-bar"><div class="stat-bar-fill" id="stat-bar-offline" style="width:0%"></div></div>
             </div>
             <div class="stat-card slow">
                 <div class="label">Slow Response</div>
                 <div class="value" id="stat-slow">-</div>
+                <div class="stat-bar"><div class="stat-bar-fill" id="stat-bar-slow" style="width:0%"></div></div>
             </div>
             <div class="stat-card total">
                 <div class="label">Total Monitored</div>
                 <div class="value" id="stat-total">-</div>
+                <div class="stat-bar"><div class="stat-bar-fill" id="stat-bar-total" style="width:100%"></div></div>
             </div>
         </div>
 
@@ -938,17 +1157,17 @@
             <!-- Left Area: Services -->
             <div class="panel">
                 <div class="panel-header">
-                    <span>MAP SERVICES</span>
-                    <div style="display:flex;gap:6px;margin-left:auto;">
+                    <span class="panel-header-title">MAP SERVICES</span>
+                    <div class="view-toggle-group" style="margin-left:auto;">
                         <button class="view-toggle-btn active" id="btn-view-list"  onclick="setViewMode('list')"  title="List view">≡ List</button>
                         <button class="view-toggle-btn"        id="btn-view-group" onclick="setViewMode('group')" title="Group by tag">⊞ Group</button>
                     </div>
                 </div>
                 <div id="tag-filter-bar" style="display:none;"></div>
                 <div class="panel-body" id="services-container">
-                    <div class="empty-state">
+                    <div class="empty-state loading">
                         <div class="icon">⌛</div>
-                        <div>กำลังโหลดข้อมูล...</div>
+                        <div class="title">กำลังโหลดข้อมูล...</div>
                     </div>
                 </div>
             </div>
@@ -956,12 +1175,14 @@
             <!-- Right Area: Alerts -->
             <div class="panel">
                 <div class="panel-header">
-                    <span>RECENT ALERTS</span>
+                    <span class="panel-header-title">RECENT ALERTS</span>
+                    <span id="alert-count-badge" style="display:none; font-family:var(--font-tech); font-size:10px; color:var(--neon-yellow); background:rgba(255,201,64,0.1); border:1px solid rgba(255,201,64,0.3); padding:1px 7px; border-radius:10px;"></span>
                 </div>
                 <div class="panel-body" id="alerts-container">
                     <div class="empty-state">
                         <div class="icon">🔕</div>
-                        <div>ยังไม่มีการแจ้งเตือน</div>
+                        <div class="title">ยังไม่มีการแจ้งเตือน</div>
+                        <div class="hint">alerts จะปรากฏที่นี่</div>
                     </div>
                 </div>
             </div>
@@ -988,7 +1209,7 @@
             <!-- Map Services Tab -->
             <div id="map-services" class="tab-content active">
                 <div>
-                    <h3 style="color: var(--neon-blue); margin-bottom: 15px; font-size: 14px;">Add New Map Service</h3>
+                    <div class="modal-section-title">Add New Map Service</div>
 
                     <div class="form-group">
                         <label class="form-label">Service Name</label>
@@ -1027,18 +1248,14 @@
                             <option value="portal">ArcGIS Portal / Enterprise</option>
                             <option value="online">ArcGIS Online</option>
                         </select>
-                        <div style="margin-top: 6px; font-size: 11px; color: var(--text-muted);">
-                            <span id="authTypeHint"></span>
-                        </div>
+                        <div class="form-hint"><span id="authTypeHint"></span></div>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label">Check Interval (นาที)</label>
                         <input type="number" id="mapServiceInterval" class="form-input"
                                min="1" max="1440" placeholder="ใช้ค่า global (เว้นว่าง)" />
-                        <div style="margin-top: 6px; font-size: 11px; color: var(--text-muted);">
-                            เว้นว่างไว้ = ใช้ interval ของระบบ &nbsp;·&nbsp; ระบุค่า = กำหนดรอบเช็คเฉพาะ service นี้
-                        </div>
+                        <div class="form-hint">เว้นว่างไว้ = ใช้ interval ของระบบ · ระบุค่า = กำหนดรอบเช็คเฉพาะ service นี้</div>
                     </div>
 
                     <div class="form-group">
@@ -1047,15 +1264,13 @@
                             <div id="tagChipsEdit" style="display:contents;"></div>
                             <input type="text" id="tagInput" placeholder="พิมพ์แล้วกด Enter หรือ , ..." autocomplete="off" />
                         </div>
-                        <div style="margin-top: 6px; font-size: 11px; color: var(--text-muted);">
-                            เช่น production, ระบบแผนที่, critical
-                        </div>
+                        <div class="form-hint">เช่น production, ระบบแผนที่, critical</div>
                     </div>
 
                     <button class="btn-submit" id="service-submit-btn" onclick="addMapService()">➕ Add Service</button>
                     <button class="btn-submit" id="service-cancel-btn" onclick="cancelEditService()" style="display:none; background: transparent; color: var(--neon-yellow); border: 1px solid var(--neon-yellow); margin-top: 8px;">✕ Cancel Edit</button>
 
-                    <h3 style="color: var(--neon-blue); margin-top: 25px; margin-bottom: 15px; font-size: 14px;">Configured Services</h3>
+                    <div class="modal-section-title">Configured Services</div>
                     <div id="servicesList"></div>
                 </div>
             </div>
@@ -1063,7 +1278,7 @@
             <!-- Email Configuration Tab -->
             <div id="email-config" class="tab-content">
                 <div>
-                    <h3 style="color: var(--neon-blue); margin-bottom: 15px; font-size: 14px;">Email Server Configuration</h3>
+                    <div class="modal-section-title">Email Server Configuration</div>
 
                     <div class="form-group">
                         <label class="form-label">SMTP Server</label>
@@ -1090,7 +1305,7 @@
                         <input type="email" id="fromEmail" class="form-input" placeholder="e.g., alerts@company.com" />
                     </div>
 
-                    <h3 style="color: var(--neon-blue); margin-top: 20px; margin-bottom: 15px; font-size: 14px;">Alert Recipients</h3>
+                    <div class="modal-section-title">Alert Recipients</div>
 
                     <div class="form-group">
                         <label class="form-label">Add Recipient Email</label>
@@ -1114,10 +1329,9 @@
             <!-- Monitor Settings Tab -->
             <div id="monitor-settings" class="tab-content">
                 <div>
-                    <h3 style="color: var(--neon-blue); margin-bottom: 15px; font-size: 14px;">Auto-Check Interval</h3>
-                    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px; line-height: 1.6;">
-                        กำหนดความถี่ในการตรวจสอบ service อัตโนมัติ<br>
-                        การเปลี่ยนแปลงจะมีผลในรอบถัดไปโดยไม่ต้องรีสตาร์ท
+                    <div class="modal-section-title">Auto-Check Interval</div>
+                    <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 16px; line-height: 1.6;">
+                        กำหนดความถี่ในการตรวจสอบ service อัตโนมัติ — การเปลี่ยนแปลงจะมีผลในรอบถัดไปโดยไม่ต้องรีสตาร์ท
                     </p>
 
                     <div class="form-group">
@@ -1140,24 +1354,21 @@
                                placeholder="e.g. 20" />
                     </div>
 
-                    <div style="background: rgba(0,200,255,0.05); border: 1px solid rgba(0,200,255,0.15); border-radius: 6px; padding: 12px 16px; margin-bottom: 20px;">
-                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">CURRENT INTERVAL</div>
-                        <div id="currentIntervalDisplay" style="font-family: var(--font-tech); font-size: 22px; color: var(--neon-blue);">-- นาที</div>
+                    <div class="interval-display-box">
+                        <div class="idl-label">CURRENT INTERVAL</div>
+                        <div id="currentIntervalDisplay" class="idl-value">-- นาที</div>
                     </div>
 
-                    <h3 style="color: var(--neon-blue); margin-bottom: 10px; margin-top: 10px; font-size: 14px;">Stagger Delay</h3>
-                    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px; line-height: 1.6;">
-                        หน่วงเวลาระหว่าง service แต่ละตัวเพื่อกระจาย network load<br>
-                        เช่น 5 วินาที = service ถัดไปจะเช็คหลังจาก 5 วินาที
+                    <div class="modal-section-title">Stagger Delay</div>
+                    <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 15px; line-height: 1.6;">
+                        หน่วงเวลาระหว่าง service แต่ละตัวเพื่อกระจาย network load — เช่น 5 วินาที = service ถัดไปจะเช็คหลังจาก 5 วินาที
                     </p>
 
                     <div class="form-group">
                         <label class="form-label">หน่วงเวลาระหว่าง service (วินาที)</label>
                         <input type="number" id="staggerSeconds" class="form-input"
                                min="0" max="60" value="5" placeholder="5" />
-                        <div style="margin-top: 6px; font-size: 11px; color: var(--text-muted);">
-                            0 = เช็คพร้อมกันทั้งหมด &nbsp;·&nbsp; แนะนำ 3–10 วินาที
-                        </div>
+                        <div class="form-hint">0 = เช็คพร้อมกันทั้งหมด · แนะนำ 3–10 วินาที</div>
                     </div>
 
                     <button class="btn-submit" onclick="saveMonitorSettings()">💾 บันทึกการตั้งค่า</button>
@@ -1249,17 +1460,25 @@
             const allTags = [...new Set(services.flatMap(s => s.tags || []))].sort();
             if (allTags.length === 0) { bar.style.display = 'none'; return; }
             bar.style.display = 'flex';
+
+            // Count services per tag
+            const tagCounts = {};
+            allTags.forEach(t => {
+                tagCounts[t] = services.filter(s => (s.tags || []).includes(t)).length;
+            });
+
             bar.innerHTML = `<span class="tag-filter-bar-label">FILTER</span>
-                <button class="filter-chip${activeTagFilter==='all'?' active':''}" data-tag="all" onclick="setTagFilter('all')">All</button>
+                <button class="filter-chip${activeTagFilter==='all'?' active':''}" data-tag="all" onclick="setTagFilter('all')">All <span class="chip-count">${services.length}</span></button>
                 ${allTags.map(t => {
                     const c = tagColor(t);
                     const isActive = activeTagFilter === t;
+                    const cnt = tagCounts[t];
                     return `<button class="filter-chip${isActive?' active':''}" data-tag="${t}"
                                 style="${isActive?`border-color:${c};color:${c};background:${c}18;`:''}"
                                 onmouseover="this.style.borderColor='${c}';this.style.color='${c}';"
                                 onmouseout="if(this.dataset.tag!==activeTagFilter){this.style.borderColor='';this.style.color='';}"
                                 onclick="setTagFilter('${t.replace(/'/g,"\\'")}')">
-                                ${t}</button>`;
+                                ${t} <span class="chip-count">${cnt}</span></button>`;
                 }).join('')}`;
         }
         let emailRecipients = [];
@@ -1328,10 +1547,23 @@
 
         function renderStats(stats) {
             if (!stats) return;
-            document.getElementById('stat-online').innerText = stats.online;
+            document.getElementById('stat-online').innerText  = stats.online;
             document.getElementById('stat-offline').innerText = stats.offline;
-            document.getElementById('stat-slow').innerText = stats.slow;
-            document.getElementById('stat-total').innerText = stats.total;
+            document.getElementById('stat-slow').innerText    = stats.slow;
+            document.getElementById('stat-total').innerText   = stats.total;
+
+            // Offline pulse animation
+            const offlineVal = document.getElementById('stat-offline');
+            offlineVal.classList.toggle('has-issues', stats.offline > 0);
+
+            // Stat bars — show proportion vs total
+            const total = stats.total || 1;
+            const barOnline  = document.getElementById('stat-bar-online');
+            const barOffline = document.getElementById('stat-bar-offline');
+            const barSlow    = document.getElementById('stat-bar-slow');
+            if (barOnline)  barOnline.style.width  = Math.round((stats.online  / total) * 100) + '%';
+            if (barOffline) barOffline.style.width = Math.round((stats.offline / total) * 100) + '%';
+            if (barSlow)    barSlow.style.width    = Math.round((stats.slow    / total) * 100) + '%';
         }
 
         function serviceRowHtml(svc) {
@@ -1389,11 +1621,19 @@
                     sparklineHtml += '</div>'; // .sparkline-wrapper
                 }
                 const timeStr   = svc.lastChecked ? new Date(svc.lastChecked).toLocaleTimeString('en-US', { hour12: false }) : '--:--:--';
-                const tagsHtml  = (svc.tags || []).length
-                    ? `<div class="service-tags">${(svc.tags).map(t => tagChipHtml(t)).join('')}</div>`
-                    : '';
+                const allTags   = svc.tags || [];
+                const MAX_TAGS  = 3;
+                let tagsHtml = '';
+                if (allTags.length > 0) {
+                    const visible = allTags.slice(0, MAX_TAGS);
+                    const remaining = allTags.length - visible.length;
+                    const moreHtml = remaining > 0
+                        ? `<span class="tag-chip-more" title="${allTags.slice(MAX_TAGS).join(', ')}">+${remaining}</span>`
+                        : '';
+                    tagsHtml = `<div class="service-tags">${visible.map(t => tagChipHtml(t)).join('')}${moreHtml}</div>`;
+                }
                 return `
-                    <div class="service-row status-${status}">
+                    <div class="service-row status-${status}" title="${svc.serviceName}">
                         <div class="status-dot-container"><div class="status-dot"></div></div>
                         <div class="service-info">
                             <div class="service-name" title="${svc.serviceName}">${svc.serviceName}</div>
@@ -1415,7 +1655,7 @@
         function renderServices(services) {
             const container = document.getElementById('services-container');
             if (!services || services.length === 0) {
-                container.innerHTML = `<div class="empty-state"><div class="icon">&#x231B;</div><div>ยังไม่มีข้อมูล — เพิ่ม service ใน Settings</div></div>`;
+                container.innerHTML = `<div class="empty-state"><div class="icon">&#x231B;</div><div class="title">ยังไม่มีข้อมูล</div><div class="hint">เพิ่ม service ใน Settings</div></div>`;
                 renderTagFilterBar([]);
                 return;
             }
@@ -1428,7 +1668,7 @@
                 : services.filter(s => (s.tags || []).includes(activeTagFilter));
 
             if (filtered.length === 0) {
-                container.innerHTML = `<div class="empty-state"><div class="icon">🏷</div><div>ไม่มี service ใน tag "${activeTagFilter}"</div></div>`;
+                container.innerHTML = `<div class="empty-state"><div class="icon">&#x1F3F7;</div><div class="title">ไม่มี service ใน tag นี้</div><div class="hint">${activeTagFilter}</div></div>`;
                 return;
             }
 
@@ -1474,16 +1714,23 @@
 
         function renderAlerts(alerts) {
             const container = document.getElementById('alerts-container');
+            const countBadge = document.getElementById('alert-count-badge');
             if (!alerts || alerts.length === 0) {
-                container.innerHTML = `<div class="empty-state"><div class="icon">&#x1F515;</div><div>ยังไม่มีการแจ้งเตือน</div></div>`;
+                container.innerHTML = `<div class="empty-state"><div class="icon">&#x1F515;</div><div class="title">ยังไม่มีการแจ้งเตือน</div><div class="hint">alerts จะปรากฏที่นี่</div></div>`;
+                if (countBadge) countBadge.style.display = 'none';
                 return;
+            }
+            // Show alert count badge
+            if (countBadge) {
+                countBadge.style.display = 'inline';
+                countBadge.textContent = alerts.length + ' รายการ';
             }
             const reversedAlerts = [...alerts].reverse();
             let html = '<div class="alerts-list">';
             reversedAlerts.forEach(alert => {
                 const level = alert.level || 'Info';
                 const timeStr = new Date(alert.timestamp).toLocaleTimeString('en-US', { hour12: false });
-                const dateStr = new Date(alert.timestamp).toLocaleDateString();
+                const dateStr = new Date(alert.timestamp).toLocaleDateString('th-TH', { month: 'short', day: 'numeric' });
                 let badgeClass = 'Info';
                 if (level === 'Recovery') badgeClass = 'Online';
                 if (level === 'Critical') badgeClass = 'Offline';

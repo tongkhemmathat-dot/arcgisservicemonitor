@@ -1176,6 +1176,7 @@
         let refreshInterval;
         let currentEditId = null;
         let globalCheckInterval = 15;
+        let dashboardData = null;
         let activeTagFilter = 'all';
         let viewMode = 'list';
         let currentTags = [];             // tags ที่กำลัง edit ใน form
@@ -1269,6 +1270,7 @@
                 const response = await fetch(`${API}/api/monitor/dashboard`);
                 if (!response.ok) throw new Error("Network response was not ok");
                 const data = await response.json();
+                dashboardData = data;
                 updateUI(data);
                 const now = new Date();
                 document.getElementById('last-update-time').innerText =

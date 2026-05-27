@@ -582,6 +582,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 url = payload.get("url", "")
                 raw_interval = payload.get("checkIntervalMinutes")
                 svc_interval = max(1, int(raw_interval)) if raw_interval else None
+                raw_tags = payload.get("tags", [])
+                tags = [t.strip() for t in raw_tags if isinstance(t, str) and t.strip()]
                 new_service = {
                     "id": new_id,
                     "serviceName": payload.get("name", "Unknown"),
@@ -592,6 +594,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "password": encrypt_password(payload.get("password", "")),
                     "authType": payload.get("authType", "server"),
                     "checkIntervalMinutes": svc_interval,
+                    "tags": tags,
                     "status": "Unknown",
                     "pingMs": None,
                     "pingHistory": [],
@@ -625,6 +628,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                         if "checkIntervalMinutes" in payload:
                             raw = payload["checkIntervalMinutes"]
                             svc["checkIntervalMinutes"] = max(1, int(raw)) if raw else None
+                        if "tags" in payload:
+                            raw_tags = payload["tags"]
+                            svc["tags"] = [t.strip() for t in raw_tags if isinstance(t, str) and t.strip()]
                         updated = True
                         break
                 if not updated:

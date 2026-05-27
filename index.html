@@ -389,6 +389,137 @@
             text-align: right;
         }
 
+        /* ─── Tags ─────────────────────────────── */
+        .tag-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-family: var(--font-ui);
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            border: 1px solid;
+            cursor: default;
+            white-space: nowrap;
+        }
+        .tag-chip.removable { cursor: pointer; }
+        .tag-chip.removable:hover { opacity: 0.75; }
+
+        .service-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 4px;
+        }
+
+        /* ─── Filter bar ────────────────────────── */
+        .tag-filter-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding: 10px 16px 6px;
+            border-bottom: 1px solid var(--panel-border);
+            align-items: center;
+        }
+        .tag-filter-bar-label {
+            font-size: 10px;
+            font-family: var(--font-tech);
+            color: var(--text-muted);
+            margin-right: 2px;
+            letter-spacing: 0.06em;
+        }
+        .filter-chip {
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-family: var(--font-ui);
+            font-weight: 600;
+            border: 1px solid var(--panel-border);
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.18s;
+        }
+        .filter-chip:hover { border-color: var(--neon-blue); color: var(--neon-blue); }
+        .filter-chip.active {
+            background: rgba(0,200,255,0.15);
+            border-color: var(--neon-blue);
+            color: var(--neon-blue);
+        }
+        .view-toggle-btn {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 13px;
+            border: 1px solid var(--panel-border);
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.18s;
+            margin-left: auto;
+        }
+        .view-toggle-btn.active {
+            border-color: var(--neon-blue);
+            color: var(--neon-blue);
+            background: rgba(0,200,255,0.1);
+        }
+
+        /* ─── Group header ──────────────────────── */
+        .group-section { margin-bottom: 6px; }
+        .group-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            font-family: var(--font-tech);
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--panel-border);
+            margin-bottom: 2px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .group-header:hover { color: var(--text-main); }
+        .group-header .group-count {
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.06);
+        }
+        .group-collapse-icon { margin-left: auto; font-size: 10px; }
+
+        /* ─── Tag input widget (form) ───────────── */
+        .tag-input-container {
+            background: rgba(30, 45, 74, 0.3);
+            border: 1px solid var(--panel-border);
+            border-radius: 4px;
+            padding: 6px 10px;
+            min-height: 40px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            align-items: center;
+            transition: border-color 0.2s;
+            cursor: text;
+        }
+        .tag-input-container:focus-within {
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 10px rgba(0,200,255,0.1);
+        }
+        .tag-input-container input {
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--text-main);
+            font-family: var(--font-ui);
+            font-size: 13px;
+            min-width: 120px;
+            flex: 1;
+        }
+        .tag-input-container input::placeholder { color: var(--text-muted); }
+
         .service-error {
             font-family: var(--font-tech);
             font-size: 10px;
@@ -808,7 +939,12 @@
             <div class="panel">
                 <div class="panel-header">
                     <span>MAP SERVICES</span>
+                    <div style="display:flex;gap:6px;margin-left:auto;">
+                        <button class="view-toggle-btn active" id="btn-view-list"  onclick="setViewMode('list')"  title="List view">≡ List</button>
+                        <button class="view-toggle-btn"        id="btn-view-group" onclick="setViewMode('group')" title="Group by tag">⊞ Group</button>
+                    </div>
                 </div>
+                <div id="tag-filter-bar" style="display:none;"></div>
                 <div class="panel-body" id="services-container">
                     <div class="empty-state">
                         <div class="icon">⌛</div>
@@ -902,6 +1038,17 @@
                                min="1" max="1440" placeholder="ใช้ค่า global (เว้นว่าง)" />
                         <div style="margin-top: 6px; font-size: 11px; color: var(--text-muted);">
                             เว้นว่างไว้ = ใช้ interval ของระบบ &nbsp;·&nbsp; ระบุค่า = กำหนดรอบเช็คเฉพาะ service นี้
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Tags / กลุ่ม</label>
+                        <div class="tag-input-container" id="tagInputContainer" onclick="document.getElementById('tagInput').focus()">
+                            <div id="tagChipsEdit" style="display:contents;"></div>
+                            <input type="text" id="tagInput" placeholder="พิมพ์แล้วกด Enter หรือ , ..." autocomplete="off" />
+                        </div>
+                        <div style="margin-top: 6px; font-size: 11px; color: var(--text-muted);">
+                            เช่น production, ระบบแผนที่, critical
                         </div>
                     </div>
 
@@ -1028,9 +1175,92 @@
             : location.pathname.replace(/\/(index\.html)?$/, '').replace(/\/$/, '');
         let refreshInterval;
         let currentEditId = null;
-        let globalCheckInterval = 15;  // นาที — อัปเดตจาก dashboard response
-        const liveHistory = {};   // {serviceId: [{ms, t}, ...]} — in-memory only
-        const LIVE_MAX = 144;     // keep last 144 live points (~24h at 10-min ping)
+        let globalCheckInterval = 15;
+        let activeTagFilter = 'all';
+        let viewMode = 'list';
+        let currentTags = [];             // tags ที่กำลัง edit ใน form
+        const liveHistory = {};
+        const LIVE_MAX = 144;
+
+        // ─── Tag color helper ─────────────────────────────────────────
+        const TAG_PALETTE = ['#00c8ff','#00ff9d','#ffd700','#ff6b9d','#a78bfa','#fb923c','#34d399','#f87171','#38bdf8','#e879f9'];
+        function tagColor(tag) {
+            let h = 0;
+            for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) & 0xffff;
+            return TAG_PALETTE[h % TAG_PALETTE.length];
+        }
+        function tagChipHtml(tag, removable = false) {
+            const c = tagColor(tag);
+            return `<span class="tag-chip${removable?' removable':''}" style="color:${c};border-color:${c};background:${c}18;"
+                        ${removable ? `onclick="removeTag('${tag.replace(/'/g,"\\'")}');event.stopPropagation();"` : ''}>
+                        ${removable ? '✕ ' : ''}${tag}</span>`;
+        }
+
+        // ─── Tag input widget ─────────────────────────────────────────
+        function renderTagChips() {
+            const container = document.getElementById('tagChipsEdit');
+            if (!container) return;
+            container.innerHTML = currentTags.map(t => tagChipHtml(t, true)).join('');
+        }
+        function addTagFromInput() {
+            const input = document.getElementById('tagInput');
+            if (!input) return;
+            const raw = input.value.split(/[,،、]/).map(t => t.trim()).filter(Boolean);
+            raw.forEach(t => { if (t && !currentTags.includes(t)) currentTags.push(t); });
+            input.value = '';
+            renderTagChips();
+        }
+        function removeTag(tag) {
+            currentTags = currentTags.filter(t => t !== tag);
+            renderTagChips();
+        }
+        function initTagInput() {
+            const input = document.getElementById('tagInput');
+            if (!input) return;
+            input.onkeydown = e => {
+                if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTagFromInput(); }
+                if (e.key === 'Backspace' && !input.value && currentTags.length) {
+                    currentTags.pop(); renderTagChips();
+                }
+            };
+            input.onblur = () => { if (input.value.trim()) addTagFromInput(); };
+        }
+
+        // ─── View mode ────────────────────────────────────────────────
+        function setViewMode(mode) {
+            viewMode = mode;
+            document.getElementById('btn-view-list').classList.toggle('active', mode === 'list');
+            document.getElementById('btn-view-group').classList.toggle('active', mode === 'group');
+            if (dashboardData) renderServices(dashboardData.services);
+        }
+
+        // ─── Tag filter ───────────────────────────────────────────────
+        function setTagFilter(tag) {
+            activeTagFilter = tag;
+            document.querySelectorAll('.filter-chip').forEach(el => {
+                el.classList.toggle('active', el.dataset.tag === tag);
+            });
+            if (dashboardData) renderServices(dashboardData.services);
+        }
+        function renderTagFilterBar(services) {
+            const bar = document.getElementById('tag-filter-bar');
+            if (!bar) return;
+            const allTags = [...new Set(services.flatMap(s => s.tags || []))].sort();
+            if (allTags.length === 0) { bar.style.display = 'none'; return; }
+            bar.style.display = 'flex';
+            bar.innerHTML = `<span class="tag-filter-bar-label">FILTER</span>
+                <button class="filter-chip${activeTagFilter==='all'?' active':''}" data-tag="all" onclick="setTagFilter('all')">All</button>
+                ${allTags.map(t => {
+                    const c = tagColor(t);
+                    const isActive = activeTagFilter === t;
+                    return `<button class="filter-chip${isActive?' active':''}" data-tag="${t}"
+                                style="${isActive?`border-color:${c};color:${c};background:${c}18;`:''}"
+                                onmouseover="this.style.borderColor='${c}';this.style.color='${c}';"
+                                onmouseout="if(this.dataset.tag!==activeTagFilter){this.style.borderColor='';this.style.color='';}"
+                                onclick="setTagFilter('${t.replace(/'/g,"\\'")}')">
+                                ${t}</button>`;
+                }).join('')}`;
+        }
         let emailRecipients = [];
 
         // --- Core Fetch Logic ---
@@ -1102,14 +1332,7 @@
             document.getElementById('stat-total').innerText = stats.total;
         }
 
-        function renderServices(services) {
-            const container = document.getElementById('services-container');
-            if (!services || services.length === 0) {
-                container.innerHTML = `<div class="empty-state"><div class="icon">&#x231B;</div><div>ยังไม่มีข้อมูล — เพิ่ม service ใน Settings</div></div>`;
-                return;
-            }
-            let html = '<div class="services-list">';
-            services.forEach(svc => {
+        function serviceRowHtml(svc) {
                 const status = svc.status || 'Unknown';
                 const ping = svc.pingMs !== null ? svc.pingMs : 0;
                 const pingDisplay = svc.pingMs !== null ? `${ping}ms` : '-';
@@ -1163,14 +1386,18 @@
                     }
                     sparklineHtml += '</div>'; // .sparkline-wrapper
                 }
-                const timeStr = svc.lastChecked ? new Date(svc.lastChecked).toLocaleTimeString('en-US', { hour12: false }) : '--:--:--';
-                html += `
+                const timeStr   = svc.lastChecked ? new Date(svc.lastChecked).toLocaleTimeString('en-US', { hour12: false }) : '--:--:--';
+                const tagsHtml  = (svc.tags || []).length
+                    ? `<div class="service-tags">${(svc.tags).map(t => tagChipHtml(t)).join('')}</div>`
+                    : '';
+                return `
                     <div class="service-row status-${status}">
                         <div class="status-dot-container"><div class="status-dot"></div></div>
                         <div class="service-info">
                             <div class="service-name" title="${svc.serviceName}">${svc.serviceName}</div>
                             <div class="service-path" title="${svc.servicePath}">${svc.servicePath || 'N/A'}</div>
                             ${status === 'Offline' && svc.lastError ? `<div class="service-error" title="${svc.lastError}">&#x26A0; ${svc.lastError}</div>` : ''}
+                            ${tagsHtml}
                         </div>
                         <div><span class="badge type">${svc.serviceType}</span></div>
                         <div><span class="badge ${status}">${status}</span></div>
@@ -1181,9 +1408,66 @@
                         </div>
                         <div class="last-checked">${timeStr}</div>
                     </div>`;
-            });
-            html += '</div>';
-            container.innerHTML = html;
+        }
+
+        function renderServices(services) {
+            const container = document.getElementById('services-container');
+            if (!services || services.length === 0) {
+                container.innerHTML = `<div class="empty-state"><div class="icon">&#x231B;</div><div>ยังไม่มีข้อมูล — เพิ่ม service ใน Settings</div></div>`;
+                renderTagFilterBar([]);
+                return;
+            }
+
+            renderTagFilterBar(services);
+
+            // Apply tag filter
+            const filtered = activeTagFilter === 'all'
+                ? services
+                : services.filter(s => (s.tags || []).includes(activeTagFilter));
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<div class="empty-state"><div class="icon">🏷</div><div>ไม่มี service ใน tag "${activeTagFilter}"</div></div>`;
+                return;
+            }
+
+            if (viewMode === 'group') {
+                // Group by tags
+                const groups = {};
+                filtered.forEach(svc => {
+                    const tags = svc.tags && svc.tags.length ? svc.tags : ['(ไม่มี tag)'];
+                    tags.forEach(tag => {
+                        if (!groups[tag]) groups[tag] = [];
+                        if (!groups[tag].find(s => s.id === svc.id)) groups[tag].push(svc);
+                    });
+                });
+                let html = '';
+                Object.keys(groups).sort().forEach(tag => {
+                    const c = tag === '(ไม่มี tag)' ? 'var(--text-muted)' : tagColor(tag);
+                    const id = `grp-${tag.replace(/\W/g,'_')}`;
+                    html += `<div class="group-section">
+                        <div class="group-header" onclick="toggleGroup('${id}')">
+                            <span style="color:${c};font-weight:600;">${tag}</span>
+                            <span class="group-count">${groups[tag].length}</span>
+                            <span class="group-collapse-icon" id="${id}-icon">▲</span>
+                        </div>
+                        <div class="services-list" id="${id}">
+                            ${groups[tag].map(svc => serviceRowHtml(svc)).join('')}
+                        </div>
+                    </div>`;
+                });
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = `<div class="services-list">${filtered.map(svc => serviceRowHtml(svc)).join('')}</div>`;
+            }
+        }
+
+        function toggleGroup(id) {
+            const el = document.getElementById(id);
+            const icon = document.getElementById(id + '-icon');
+            if (!el) return;
+            const hidden = el.style.display === 'none';
+            el.style.display = hidden ? '' : 'none';
+            if (icon) icon.textContent = hidden ? '▲' : '▼';
         }
 
         function renderAlerts(alerts) {
@@ -1279,7 +1563,8 @@
                         <div class="service-item-info">
                             <div class="service-item-name">${svc.serviceName}</div>
                             <div class="service-item-url">${svc.url}</div>
-                            <div style="color: var(--text-muted); font-size: 11px; margin-top: 4px;">Type: ${svc.serviceType} &nbsp;&middot;&nbsp; Path: ${svc.servicePath || 'N/A'} &nbsp;&middot;&nbsp; Interval: ${svc.checkIntervalMinutes ? svc.checkIntervalMinutes + ' min' : 'global'}</div>
+                            <div style="color: var(--text-muted); font-size: 11px; margin-top: 4px;">Type: ${svc.serviceType} &nbsp;&middot;&nbsp; Interval: ${svc.checkIntervalMinutes ? svc.checkIntervalMinutes + ' min' : 'global'}</div>
+                            ${(svc.tags||[]).length ? `<div class="service-tags" style="margin-top:5px;">${svc.tags.map(t=>tagChipHtml(t)).join('')}</div>` : ''}
                         </div>
                         <div class="service-item-actions">
                             <button class="btn-small" style="background:rgba(0,200,255,0.1);border-color:rgba(0,200,255,0.3);color:var(--neon-blue);" onclick="editMapService(${svc.id})">&#x270F;&#xFE0F;</button>
@@ -1325,12 +1610,14 @@
             const authType = document.getElementById('mapServiceAuthType').value;
             const intervalRaw = document.getElementById('mapServiceInterval').value.trim();
             const checkIntervalMinutes = intervalRaw ? Math.max(1, parseInt(intervalRaw)) : null;
+            if (document.getElementById('tagInput')?.value.trim()) addTagFromInput();
+            const tags = [...currentTags];
 
             if (!name || !url) { showToast('Please enter Service Name and URL', 'error'); return; }
             if (!url.startsWith('http')) { showToast('Please enter a valid URL starting with http', 'error'); return; }
 
             const isEdit = currentEditId !== null;
-            const payload = { name, url, type, username, password, authType, checkIntervalMinutes };
+            const payload = { name, url, type, username, password, authType, checkIntervalMinutes, tags };
             if (isEdit) payload.id = currentEditId;
 
             try {
@@ -1362,6 +1649,9 @@
             document.getElementById('authTypeGroup').style.display = 'none';
             document.getElementById('authTypeHint').textContent = '';
             document.getElementById('mapServiceInterval').value = '';
+            currentTags = [];
+            renderTagChips();
+            if (document.getElementById('tagInput')) document.getElementById('tagInput').value = '';
             document.getElementById('service-submit-btn').textContent = 'Add Service';
             document.getElementById('service-cancel-btn').style.display = 'none';
         }
@@ -1381,6 +1671,8 @@
                 document.getElementById('authTypeGroup').style.display = svc.username ? 'block' : 'none';
                 updateAuthTypeHint();
                 document.getElementById('mapServiceInterval').value = svc.checkIntervalMinutes || '';
+                currentTags = [...(svc.tags || [])];
+                renderTagChips();
                 currentEditId = id;
                 document.getElementById('service-submit-btn').textContent = 'Update Service';
                 document.getElementById('service-cancel-btn').style.display = 'block';
@@ -1644,6 +1936,7 @@
 
         // --- Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
+            initTagInput();
             fetchDashboardData();
             refreshInterval = setInterval(fetchDashboardData, 30000);
             setInterval(livePing, 10000);

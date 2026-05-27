@@ -212,143 +212,206 @@ def send_alert_email(subject, message):
         print(f"[EMAIL ERROR] {e}")
         return False
 
+def _check_one(service):
+    """ตรวจสอบ service เดียว — คืนค่า (updated_service, alert_or_None)"""
+    url = service.get("url")
+    if not url:
+        return service, None
+
+    username  = service.get("username", "")
+    password  = decrypt_password(service.get("password", ""))
+    auth_type = service.get("authType", "server")
+
+    sep       = "&" if "?" in url else "?"
+    check_url = url + sep + "f=json"
+    token_error = None
+
+    if username and password:
+        token, token_error = get_arcgis_token(url, username, password, auth_type)
+        if token:
+            check_url += f"&token={token}"
+
+    start_time   = time.time()
+    status       = "Unknown"
+    ping_ms      = None
+    error_detail = ""
+
+    if token_error:
+        status       = "Offline"
+        error_detail = f"Token error: {token_error}"
+    else:
+        try:
+            req = urllib.request.Request(check_url, headers={"User-Agent": "ArcGISMonitor/1.0"})
+            with urllib.request.urlopen(req, timeout=5) as response:
+                content = response.read().decode("utf-8")
+                ping_ms = int((time.time() - start_time) * 1000)
+                try:
+                    json_resp = json.loads(content)
+                    if "error" in json_resp:
+                        status       = "Offline"
+                        err          = json_resp["error"]
+                        error_detail = err.get("message", f"Error code {err.get('code', '?')}")
+                    elif ping_ms > 3000:
+                        status = "Slow"
+                    else:
+                        status = "Online"
+                except json.JSONDecodeError:
+                    status       = "Offline"
+                    error_detail = "Invalid response (not JSON)"
+        except urllib.error.HTTPError as e:
+            status       = "Offline"
+            error_detail = f"HTTP {e.code} {e.reason}"
+        except urllib.error.URLError as e:
+            status = "Offline"
+            reason = str(e.reason).lower()
+            if "timed out" in reason or "timeout" in reason:
+                error_detail = "Connection timed out (5s)"
+            elif "getaddrinfo" in reason or "nodename" in reason or "name or service" in reason:
+                error_detail = "DNS lookup failed"
+            elif "connection refused" in reason:
+                error_detail = "Connection refused"
+            elif "ssl" in reason or "certificate" in reason:
+                error_detail = "SSL/certificate error"
+            else:
+                error_detail = str(e.reason)
+        except Exception as e:
+            status       = "Offline"
+            error_detail = str(e)
+
+    old_status = service.get("status", "Unknown")
+    updated    = dict(service)
+    updated["status"]      = status
+    updated["pingMs"]      = ping_ms
+    updated["lastError"]   = error_detail
+    updated["lastChecked"] = datetime.now(timezone.utc).isoformat()
+
+    history = list(service.get("pingHistory", []))
+    history.append(ping_ms if ping_ms is not None else 0)
+    updated["pingHistory"] = history[-15:]
+
+    alert = None
+    if status != old_status and old_status != "Unknown":
+        if status == "Offline":
+            alert = {"level": "Critical",  "serviceName": service.get("serviceName"),
+                     "message": f"Service {service.get('serviceName')} went Offline."}
+        elif status == "Online" and old_status in ["Offline", "Slow"]:
+            alert = {"level": "Recovery",  "serviceName": service.get("serviceName"),
+                     "message": f"Service {service.get('serviceName')} recovered and is now Online."}
+        elif status == "Slow":
+            alert = {"level": "Warning",   "serviceName": service.get("serviceName"),
+                     "message": f"Service {service.get('serviceName')} is Slow ({ping_ms}ms)."}
+
+    return updated, alert
+
+
+def _flush_results(updated_map, alerts_to_send):
+    """บันทึกผลลัพธ์ลง config และส่งอีเมลแจ้งเตือน"""
+    try:
+        data     = load_config()
+        services = data.get("services", [])
+
+        for i, svc in enumerate(services):
+            if svc.get("id") in updated_map:
+                services[i] = updated_map[svc["id"]]
+
+        stats = {"online": 0, "offline": 0, "slow": 0, "total": len(services)}
+        for s in services:
+            st = s.get("status", "Unknown")
+            if st == "Online":  stats["online"]  += 1
+            elif st == "Offline": stats["offline"] += 1
+            elif st == "Slow":  stats["slow"]    += 1
+
+        data["services"]   = services
+        data["stats"]      = stats
+        data["serverTime"] = datetime.now(timezone.utc).isoformat()
+
+        recent = data.get("recentAlerts", [])
+        for alert in alerts_to_send:
+            email_sent = send_alert_email(f"ArcGIS Monitor: {alert['level']}", alert["message"])
+            recent.append({
+                "level":       alert["level"],
+                "timestamp":   datetime.now(timezone.utc).isoformat(),
+                "serviceName": alert["serviceName"],
+                "message":     alert["message"],
+                "emailSent":   email_sent,
+            })
+        data["recentAlerts"] = recent[-20:]
+        save_config(data)
+    except Exception as e:
+        print(f"[FLUSH] Error saving results: {e}")
+
+
 def check_services(manual_trigger=False):
+    """ตรวจสอบทุก service พร้อมกัน (ใช้โดย /api/monitor/check)"""
     try:
         data = load_config()
     except Exception as e:
         print(f"Error loading config: {e}")
         return
 
-    stats = {"online": 0, "offline": 0, "slow": 0, "total": len(data.get("services", []))}
-    alerts_to_send = []
+    services    = data.get("services", [])
+    stagger_sec = max(0, int(data.get("staggerSeconds", 5)))
+    updated_map = {}
+    alerts      = []
 
-    for service in data.get("services", []):
-        url = service.get("url")
-        if not url:
-            continue
+    for i, svc in enumerate(services):
+        if i > 0 and stagger_sec > 0:
+            time.sleep(stagger_sec)
+        updated, alert = _check_one(svc)
+        updated_map[svc.get("id")] = updated
+        if alert:
+            alerts.append(alert)
 
-        username = service.get("username", "")
-        password = decrypt_password(service.get("password", ""))
-        auth_type = service.get("authType", "server")
+    _flush_results(updated_map, alerts)
 
-        # Build check URL — append token if credentials provided
-        sep = "&" if "?" in url else "?"
-        check_url = url + sep + "f=json"
-        token_error = None
-
-        if username and password:
-            token, token_error = get_arcgis_token(url, username, password, auth_type)
-            if token:
-                check_url += f"&token={token}"
-
-        start_time = time.time()
-        status = "Unknown"
-        ping_ms = None
-        error_detail = ""
-
-        if token_error:
-            status = "Offline"
-            error_detail = f"Token error: {token_error}"
-        else:
-            try:
-                req = urllib.request.Request(check_url, headers={"User-Agent": "ArcGISMonitor/1.0"})
-                with urllib.request.urlopen(req, timeout=5) as response:
-                    content = response.read().decode("utf-8")
-                    ping_ms = int((time.time() - start_time) * 1000)
-                    try:
-                        json_resp = json.loads(content)
-                        if "error" in json_resp:
-                            status = "Offline"
-                            err = json_resp["error"]
-                            error_detail = err.get("message", f"Error code {err.get('code', '?')}")
-                        elif ping_ms > 3000:
-                            status = "Slow"
-                        else:
-                            status = "Online"
-                    except json.JSONDecodeError:
-                        status = "Offline"
-                        error_detail = "Invalid response (not JSON)"
-            except urllib.error.HTTPError as e:
-                status = "Offline"
-                error_detail = f"HTTP {e.code} {e.reason}"
-            except urllib.error.URLError as e:
-                status = "Offline"
-                reason = str(e.reason).lower()
-                if "timed out" in reason or "timeout" in reason:
-                    error_detail = "Connection timed out (5s)"
-                elif "getaddrinfo" in reason or "nodename" in reason or "name or service" in reason:
-                    error_detail = "DNS lookup failed"
-                elif "connection refused" in reason:
-                    error_detail = "Connection refused"
-                elif "ssl" in reason or "certificate" in reason:
-                    error_detail = "SSL/certificate error"
-                else:
-                    error_detail = str(e.reason)
-            except Exception as e:
-                status = "Offline"
-                error_detail = str(e)
-
-        old_status = service.get("status", "Unknown")
-        service["status"] = status
-        service["pingMs"] = ping_ms
-        service["lastError"] = error_detail
-        service["lastChecked"] = datetime.now(timezone.utc).isoformat()
-
-        history = service.get("pingHistory", [])
-        history.append(ping_ms if ping_ms is not None else 0)
-        service["pingHistory"] = history[-15:]
-
-        if status == "Online":
-            stats["online"] += 1
-        elif status == "Offline":
-            stats["offline"] += 1
-        elif status == "Slow":
-            stats["slow"] += 1
-
-        if status != old_status and old_status != "Unknown":
-            level = None
-            if status == "Offline":
-                level = "Critical"
-                msg = f"Service {service.get('serviceName')} went Offline."
-            elif status == "Online" and old_status in ["Offline", "Slow"]:
-                level = "Recovery"
-                msg = f"Service {service.get('serviceName')} recovered and is now Online."
-            elif status == "Slow":
-                level = "Warning"
-                msg = f"Service {service.get('serviceName')} is Slow ({ping_ms}ms)."
-            if level:
-                alerts_to_send.append({"level": level, "serviceName": service.get("serviceName"), "message": msg})
-
-    data["stats"] = stats
-    data["serverTime"] = datetime.now(timezone.utc).isoformat()
-
-    recent_alerts = data.get("recentAlerts", [])
-    for alert in alerts_to_send:
-        email_sent = send_alert_email(f"ArcGIS Monitor: {alert['level']}", alert["message"])
-        recent_alerts.append({
-            "level": alert["level"],
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "serviceName": alert["serviceName"],
-            "message": alert["message"],
-            "emailSent": email_sent
-        })
-    data["recentAlerts"] = recent_alerts[-20:]
-
-    try:
-        save_config(data)
-    except Exception as e:
-        print(f"Error saving config: {e}")
 
 def monitor_loop():
+    """
+    วนทุก 60 วินาที — ตรวจสอบว่า service ใดถึงรอบเช็คแล้ว
+    แต่ละ service มี checkIntervalMinutes ของตัวเอง (ถ้าไม่ระบุ ใช้ global)
+    หน่วงเวลา staggerSeconds ระหว่าง service เพื่อกระจาย network load
+    """
     while True:
-        check_services()
         try:
-            data = load_config()
-            interval_sec = max(60, int(data.get("checkIntervalMinutes", 15)) * 60)
-        except Exception:
-            interval_sec = 900
-        print(f"[MONITOR] Next check in {interval_sec // 60} min {interval_sec % 60} sec")
-        time.sleep(interval_sec)
+            data            = load_config()
+            global_interval = max(1, int(data.get("checkIntervalMinutes", 15)))
+            stagger_sec     = max(0, int(data.get("staggerSeconds", 5)))
+            now             = time.time()
+
+            due = []
+            for svc in data.get("services", []):
+                raw = svc.get("checkIntervalMinutes")
+                svc_interval = max(1, int(raw)) if raw else global_interval
+
+                last = svc.get("lastChecked")
+                if not last:
+                    due.append(svc)
+                else:
+                    try:
+                        last_ts = datetime.fromisoformat(last.replace("Z", "+00:00")).timestamp()
+                        if now - last_ts >= svc_interval * 60:
+                            due.append(svc)
+                    except Exception:
+                        due.append(svc)
+
+            if due:
+                names = ", ".join(s.get("serviceName", "?") for s in due)
+                print(f"[MONITOR] Due: {names} | stagger={stagger_sec}s")
+                updated_map = {}
+                alerts      = []
+                for i, svc in enumerate(due):
+                    if i > 0 and stagger_sec > 0:
+                        time.sleep(stagger_sec)
+                    updated, alert = _check_one(svc)
+                    updated_map[svc.get("id")] = updated
+                    if alert:
+                        alerts.append(alert)
+                _flush_results(updated_map, alerts)
+
+        except Exception as e:
+            print(f"[MONITOR ERROR] {e}")
+
+        time.sleep(60)  # re-evaluate ทุก 1 นาที
 
 def derive_path(url):
     m = re.search(r"/services/(.+)", url, re.IGNORECASE)
@@ -440,7 +503,10 @@ class RequestHandler(BaseHTTPRequestHandler):
         elif self.path == "/api/config/interval":
             try:
                 data = load_config()
-                self._send_json({"checkIntervalMinutes": data.get("checkIntervalMinutes", 15)})
+                self._send_json({
+                    "checkIntervalMinutes": data.get("checkIntervalMinutes", 15),
+                    "staggerSeconds": data.get("staggerSeconds", 5),
+                })
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
 
@@ -496,6 +562,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 services = data.get("services", [])
                 new_id = max((s.get("id", 0) for s in services), default=0) + 1
                 url = payload.get("url", "")
+                raw_interval = payload.get("checkIntervalMinutes")
+                svc_interval = max(1, int(raw_interval)) if raw_interval else None
                 new_service = {
                     "id": new_id,
                     "serviceName": payload.get("name", "Unknown"),
@@ -505,6 +573,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "username": payload.get("username", ""),
                     "password": encrypt_password(payload.get("password", "")),
                     "authType": payload.get("authType", "server"),
+                    "checkIntervalMinutes": svc_interval,
                     "status": "Unknown",
                     "pingMs": None,
                     "pingHistory": [],
@@ -535,6 +604,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                             svc["password"] = encrypt_password(payload["password"])
                         if "authType" in payload:
                             svc["authType"] = payload["authType"]
+                        if "checkIntervalMinutes" in payload:
+                            raw = payload["checkIntervalMinutes"]
+                            svc["checkIntervalMinutes"] = max(1, int(raw)) if raw else None
                         updated = True
                         break
                 if not updated:
@@ -575,10 +647,12 @@ class RequestHandler(BaseHTTPRequestHandler):
             elif self.path == "/api/config/interval":
                 payload = self._read_json_body()
                 minutes = max(1, int(payload.get("checkIntervalMinutes", 15)))
+                stagger = max(0, int(payload.get("staggerSeconds", 5)))
                 data = load_config()
                 data["checkIntervalMinutes"] = minutes
+                data["staggerSeconds"] = stagger
                 save_config(data)
-                self._send_json({"success": True, "checkIntervalMinutes": minutes})
+                self._send_json({"success": True, "checkIntervalMinutes": minutes, "staggerSeconds": stagger})
 
             elif self.path == "/api/config/email/test":
                 payload = self._read_json_body()

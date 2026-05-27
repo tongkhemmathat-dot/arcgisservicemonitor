@@ -881,6 +881,15 @@
                         </div>
                     </div>
 
+                    <div class="form-group">
+                        <label class="form-label">Check Interval (นาที)</label>
+                        <input type="number" id="mapServiceInterval" class="form-input"
+                               min="1" max="1440" placeholder="ใช้ค่า global (เว้นว่าง)" />
+                        <div style="margin-top: 6px; font-size: 11px; color: var(--text-muted);">
+                            เว้นว่างไว้ = ใช้ interval ของระบบ &nbsp;·&nbsp; ระบุค่า = กำหนดรอบเช็คเฉพาะ service นี้
+                        </div>
+                    </div>
+
                     <button class="btn-submit" id="service-submit-btn" onclick="addMapService()">➕ Add Service</button>
                     <button class="btn-submit" id="service-cancel-btn" onclick="cancelEditService()" style="display:none; background: transparent; color: var(--neon-yellow); border: 1px solid var(--neon-yellow); margin-top: 8px;">✕ Cancel Edit</button>
 
@@ -972,6 +981,21 @@
                     <div style="background: rgba(0,200,255,0.05); border: 1px solid rgba(0,200,255,0.15); border-radius: 6px; padding: 12px 16px; margin-bottom: 20px;">
                         <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">CURRENT INTERVAL</div>
                         <div id="currentIntervalDisplay" style="font-family: var(--font-tech); font-size: 22px; color: var(--neon-blue);">-- นาที</div>
+                    </div>
+
+                    <h3 style="color: var(--neon-blue); margin-bottom: 10px; margin-top: 10px; font-size: 14px;">Stagger Delay</h3>
+                    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px; line-height: 1.6;">
+                        หน่วงเวลาระหว่าง service แต่ละตัวเพื่อกระจาย network load<br>
+                        เช่น 5 วินาที = service ถัดไปจะเช็คหลังจาก 5 วินาที
+                    </p>
+
+                    <div class="form-group">
+                        <label class="form-label">หน่วงเวลาระหว่าง service (วินาที)</label>
+                        <input type="number" id="staggerSeconds" class="form-input"
+                               min="0" max="60" value="5" placeholder="5" />
+                        <div style="margin-top: 6px; font-size: 11px; color: var(--text-muted);">
+                            0 = เช็คพร้อมกันทั้งหมด &nbsp;·&nbsp; แนะนำ 3–10 วินาที
+                        </div>
                     </div>
 
                     <button class="btn-submit" onclick="saveMonitorSettings()">💾 บันทึกการตั้งค่า</button>
@@ -1214,7 +1238,7 @@
                         <div class="service-item-info">
                             <div class="service-item-name">${svc.serviceName}</div>
                             <div class="service-item-url">${svc.url}</div>
-                            <div style="color: var(--text-muted); font-size: 11px; margin-top: 4px;">Type: ${svc.serviceType} &nbsp;&middot;&nbsp; Path: ${svc.servicePath || 'N/A'}</div>
+                            <div style="color: var(--text-muted); font-size: 11px; margin-top: 4px;">Type: ${svc.serviceType} &nbsp;&middot;&nbsp; Path: ${svc.servicePath || 'N/A'} &nbsp;&middot;&nbsp; Interval: ${svc.checkIntervalMinutes ? svc.checkIntervalMinutes + ' min' : 'global'}</div>
                         </div>
                         <div class="service-item-actions">
                             <button class="btn-small" style="background:rgba(0,200,255,0.1);border-color:rgba(0,200,255,0.3);color:var(--neon-blue);" onclick="editMapService(${svc.id})">&#x270F;&#xFE0F;</button>
@@ -1258,12 +1282,14 @@
             const username = document.getElementById('mapServiceUsername').value.trim();
             const password = document.getElementById('mapServicePassword').value.trim();
             const authType = document.getElementById('mapServiceAuthType').value;
+            const intervalRaw = document.getElementById('mapServiceInterval').value.trim();
+            const checkIntervalMinutes = intervalRaw ? Math.max(1, parseInt(intervalRaw)) : null;
 
             if (!name || !url) { showToast('Please enter Service Name and URL', 'error'); return; }
             if (!url.startsWith('http')) { showToast('Please enter a valid URL starting with http', 'error'); return; }
 
             const isEdit = currentEditId !== null;
-            const payload = { name, url, type, username, password, authType };
+            const payload = { name, url, type, username, password, authType, checkIntervalMinutes };
             if (isEdit) payload.id = currentEditId;
 
             try {
@@ -1294,6 +1320,7 @@
             document.getElementById('mapServiceAuthType').value = 'server';
             document.getElementById('authTypeGroup').style.display = 'none';
             document.getElementById('authTypeHint').textContent = '';
+            document.getElementById('mapServiceInterval').value = '';
             document.getElementById('service-submit-btn').textContent = 'Add Service';
             document.getElementById('service-cancel-btn').style.display = 'none';
         }
@@ -1312,6 +1339,7 @@
                 document.getElementById('mapServiceAuthType').value = svc.authType || 'server';
                 document.getElementById('authTypeGroup').style.display = svc.username ? 'block' : 'none';
                 updateAuthTypeHint();
+                document.getElementById('mapServiceInterval').value = svc.checkIntervalMinutes || '';
                 currentEditId = id;
                 document.getElementById('service-submit-btn').textContent = 'Update Service';
                 document.getElementById('service-cancel-btn').style.display = 'block';
@@ -1481,6 +1509,8 @@
                 const response = await fetch(`${API}/api/config/interval`);
                 const cfg = await response.json();
                 applyIntervalToUI(cfg.checkIntervalMinutes || 15);
+                const staggerEl = document.getElementById('staggerSeconds');
+                if (staggerEl) staggerEl.value = cfg.staggerSeconds ?? 5;
             } catch (e) {
                 console.warn('Could not load monitor settings:', e);
             }
@@ -1528,18 +1558,19 @@
                 showToast('กรุณาระบุช่วงเวลา 1–1440 นาที', 'error');
                 return;
             }
+            const staggerRaw = parseInt(document.getElementById('staggerSeconds')?.value) || 5;
+            const stagger = Math.max(0, Math.min(60, staggerRaw));
             try {
                 const response = await fetch(`${API}/api/config/interval`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ checkIntervalMinutes: minutes })
+                    body: JSON.stringify({ checkIntervalMinutes: minutes, staggerSeconds: stagger })
                 });
                 const result = await response.json();
                 if (!result.success) throw new Error(result.error || 'Save failed');
                 applyIntervalToUI(minutes);
-                // Reset countdown from now
                 nextCheckEpoch = Date.now() + minutes * 60 * 1000;
-                showToast(`ตั้งค่าตรวจสอบทุก ${minutes} นาที เรียบร้อย`, 'success');
+                showToast(`ตั้งค่าตรวจสอบทุก ${minutes} นาที / stagger ${stagger}s เรียบร้อย`, 'success');
             } catch (e) {
                 showToast(`บันทึกไม่สำเร็จ: ${e.message}`, 'error');
             }

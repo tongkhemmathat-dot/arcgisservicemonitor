@@ -285,9 +285,27 @@ def _check_one(service):
     updated["lastError"]   = error_detail
     updated["lastChecked"] = datetime.now(timezone.utc).isoformat()
 
-    history = list(service.get("pingHistory", []))
-    history.append(ping_ms if ping_ms is not None else 0)
-    updated["pingHistory"] = history[-15:]
+    # Migrate old format [int, ...] → [{ms, t}, ...]
+    raw_history = service.get("pingHistory", [])
+    history = []
+    for h in raw_history:
+        if isinstance(h, dict):
+            history.append(h)
+        else:
+            history.append({"ms": int(h) if h else 0, "t": ""})
+
+    # Append new entry with timestamp
+    history.append({
+        "ms": ping_ms if ping_ms is not None else 0,
+        "t":  datetime.now(timezone.utc).isoformat()
+    })
+
+    # Keep only last 24 hours (drop entries older than 24h)
+    from datetime import timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    history = [h for h in history if not h.get("t") or h["t"] >= cutoff]
+
+    updated["pingHistory"] = history
 
     alert = None
     if status != old_status and old_status != "Unknown":

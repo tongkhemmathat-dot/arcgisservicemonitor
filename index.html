@@ -1029,8 +1029,8 @@
         let refreshInterval;
         let currentEditId = null;
         let globalCheckInterval = 15;  // นาที — อัปเดตจาก dashboard response
-        const liveHistory = {};   // {serviceId: [pingMs, ...]} — in-memory only
-        const LIVE_MAX = 30;      // keep last 30 live points
+        const liveHistory = {};   // {serviceId: [{ms, t}, ...]} — in-memory only
+        const LIVE_MAX = 144;     // keep last 144 live points (~24h at 10-min ping)
         let emailRecipients = [];
 
         // --- Core Fetch Logic ---
@@ -1117,37 +1117,49 @@
                 let progressColor = 'var(--neon-green)';
                 if (status === 'Offline') progressColor = 'var(--neon-red)';
                 else if (status === 'Slow') progressColor = 'var(--neon-yellow)';
-                // Use live history if available, else fall back to saved history
-                const history = liveHistory[svc.id] || svc.pingHistory || [];
+                // Normalize history → [{ms, t}] รองรับทั้ง format เก่า (int[]) และใหม่ (object[])
+                const rawHistory = liveHistory[svc.id] || svc.pingHistory || [];
+                const history = rawHistory.map(h =>
+                    typeof h === 'object' && h !== null ? h : { ms: h ?? 0, t: null }
+                );
+                const DISPLAY_MAX = 60;
+                const display = history.slice(-DISPLAY_MAX);
+
                 let sparklineHtml = '';
-                if (history.length > 0) {
-                    const posValues = history.filter(p => p > 0);
-                    const maxPing = posValues.length ? Math.max(...posValues, 100) : 1000;
+                if (display.length > 0) {
+                    const posVals = display.map(h => h.ms).filter(v => v > 0);
+                    const maxPing = posVals.length ? Math.max(...posVals, 100) : 1000;
+                    const fmtTime = t => t ? new Date(t).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '';
+
                     sparklineHtml = '<div class="sparkline-wrapper"><div class="sparkline">';
-                    history.forEach((p, idx) => {
-                        const val = p === null ? 0 : p;
+                    display.forEach((h, idx) => {
+                        const val       = h.ms ?? 0;
                         const isOffline = val === 0;
-                        const isLast = idx === history.length - 1;
+                        const isLast    = idx === display.length - 1;
                         const heightPct = isOffline ? 15 : Math.min(100, Math.max(10, (val / maxPing) * 100));
-                        const sColor = isOffline
+                        const sColor    = isOffline
                             ? 'rgba(255,59,92,0.45)'
                             : val > 3000 ? 'var(--neon-yellow)'
                             : isLast ? 'var(--neon-green)'
                             : 'var(--neon-blue)';
-                        const opacity = isOffline ? '0.6' : isLast ? '1' : '0.75';
-                        sparklineHtml += `<div class="spark-bar" style="height:${heightPct}%;background-color:${sColor};opacity:${opacity};" title="${isOffline ? 'Offline' : val + 'ms'}"></div>`;
+                        const opacity   = isOffline ? '0.6' : isLast ? '1' : '0.75';
+                        const timeLabel = fmtTime(h.t);
+                        const tip       = isOffline
+                            ? `Offline${timeLabel ? ' · ' + timeLabel : ''}`
+                            : `${val}ms${timeLabel ? ' · ' + timeLabel : ''}`;
+                        sparklineHtml += `<div class="spark-bar" style="height:${heightPct}%;background-color:${sColor};opacity:${opacity};" title="${tip}"></div>`;
                     });
                     sparklineHtml += '</div>';
 
-                    // เส้นเวลาใต้กราฟ
-                    const svcInterval = svc.checkIntervalMinutes || globalCheckInterval;
-                    if (svc.lastChecked && history.length >= 2) {
-                        const newest   = new Date(svc.lastChecked);
-                        const oldest   = new Date(newest.getTime() - (history.length - 1) * svcInterval * 60000);
-                        const midIdx   = Math.floor((history.length - 1) / 2);
-                        const mid      = new Date(newest.getTime() - midIdx * svcInterval * 60000);
-                        const fmt      = d => d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false });
-                        sparklineHtml += `<div class="spark-timeline"><span>${fmt(oldest)}</span><span>${fmt(mid)}</span><span>${fmt(newest)}</span></div>`;
+                    // Timeline ใช้ timestamp จริงจาก history
+                    if (display.length >= 2) {
+                        const fmt  = d => d ? new Date(d).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+                        const tOld = fmt(display[0].t);
+                        const tMid = fmt(display[Math.floor((display.length - 1) / 2)].t);
+                        const tNew = fmt(display[display.length - 1].t);
+                        if (tOld || tNew) {
+                            sparklineHtml += `<div class="spark-timeline"><span>${tOld}</span><span>${tMid}</span><span>${tNew}</span></div>`;
+                        }
                     }
                     sparklineHtml += '</div>'; // .sparkline-wrapper
                 }
@@ -1613,9 +1625,10 @@
                 const data = await res.json();
                 if (!data.results) return;
 
+                const now = new Date().toISOString();
                 data.results.forEach(r => {
                     if (!liveHistory[r.id]) liveHistory[r.id] = [];
-                    liveHistory[r.id].push(r.pingMs !== null ? r.pingMs : 0);
+                    liveHistory[r.id].push({ ms: r.pingMs !== null ? r.pingMs : 0, t: now });
                     if (liveHistory[r.id].length > LIVE_MAX) liveHistory[r.id].shift();
 
                     // Update pingMs display on dashboardData so stat cards stay current

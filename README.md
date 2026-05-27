@@ -1,530 +1,297 @@
 # ArcGIS Service Monitor
 
-Dashboard สำหรับตรวจสอบสถานะ ArcGIS REST Services แบบ Real-time  
-พร้อมระบบแจ้งเตือนอีเมลเมื่อ service offline หรือ response ช้า
+Dashboard ตรวจสอบสถานะ ArcGIS REST Services แบบ Real-time  
+พร้อมแจ้งเตือนอีเมลเมื่อ service offline หรือตอบสนองช้า
 
 ---
 
 ## สารบัญ
 
-- [โครงสร้างไฟล์](#โครงสร้างไฟล์)
-- [วิธี Deploy](#วิธี-deploy)
-  - [1. Windows EXE Installer (แนะนำสำหรับ Windows Server)](#1-windows-exe-installer)
-  - [2. Windows + IIS (On-Premise)](#2-windows--iis-on-premise)
-  - [3. Docker — Single Container](#3-docker--single-container)
-  - [4. Docker Compose — Multi-Environment](#4-docker-compose--multi-environment)
-    - [Development](#development)
-    - [Staging](#staging)
-    - [Production](#production)
-- [การตั้งค่าระบบ](#การตั้งค่าระบบ)
-- [API Endpoints](#api-endpoints)
-- [แก้ปัญหาเบื้องต้น](#แก้ปัญหาเบื้องต้น)
+- [โครงสร้างโปรเจกต์](#โครงสร้างโปรเจกต์)
+- [วิธีติดตั้ง](#วิธีติดตั้ง)
+  - [1. Windows — EXE Installer](#1-windows--exe-installer)
+  - [2. Windows — IIS + NSSM](#2-windows--iis--nssm)
+  - [3. Docker](#3-docker)
+- [การตั้งค่า](#การตั้งค่า)
+- [API Reference](#api-reference)
+- [แก้ปัญหา](#แก้ปัญหา)
 
 ---
 
-## โครงสร้างไฟล์
+## โครงสร้างโปรเจกต์
 
 ```
 arcgisservicemonitor/
-├── monitor_backend.py        API Server + Monitor Loop (backend)
-├── index.html                Dashboard (frontend)
+├── monitor_backend.py        Python backend — HTTP server + monitor loop
+├── index.html                Dashboard (frontend — single page)
+├── requirements.txt          Python dependencies (cryptography)
 ├── config.example.json       ตัวอย่าง config
 │
-├── installer/
-│   ├── build.bat             สคริปต์ build EXE (รันบน Windows)
-│   ├── build.spec            PyInstaller spec
-│   └── installer.iss         Inno Setup script → สร้าง Setup.exe
+├── windows/
+│   ├── start.bat             รัน backend ตรงๆ (dev/test)
+│   ├── web.config            IIS reverse proxy config
+│   └── installer/
+│       ├── build.bat         สคริปต์ build installer (รันบนเครื่อง build)
+│       ├── build.spec        PyInstaller spec
+│       └── installer.iss     Inno Setup script
 │
-├── Dockerfile                สำหรับ Docker build (backend)
-├── docker-compose.yml        Base config (ใช้คู่กับ override ด้านล่าง)
-├── docker-compose.dev.yml    Dev overrides
-├── docker-compose.staging.yml  Staging overrides
-├── docker-compose.prod.yml   Production overrides
-├── nginx/
-│   └── default.conf          nginx config (serve frontend + proxy /api/)
-├── .dockerignore
-│
-├── web.config                IIS configuration (สำหรับ deploy แบบ IIS เท่านั้น)
-└── start.bat                 รันแบบ Dev บน Windows
+└── docker/
+    ├── Dockerfile            Production image (Python backend)
+    ├── Dockerfile.demo       Demo image (มี sample services ในตัว)
+    ├── docker-compose.yml    Production stack (nginx + backend)
+    └── nginx/
+        └── default.conf      nginx — serve frontend + proxy /api/
 ```
 
-> `config.json` จะถูกสร้างอัตโนมัติเมื่อรัน backend ครั้งแรก  
-> **อย่า commit `config.json`** เพราะมีข้อมูล credentials
+> `config.json` และ `encryption.key` สร้างอัตโนมัติเมื่อรันครั้งแรก — **อย่า commit**
 
 ---
 
-## วิธี Deploy
+## วิธีติดตั้ง
 
-### 1. Windows EXE Installer
+### 1. Windows — EXE Installer
 
-ติดตั้งแบบ double-click ไม่ต้องมี Python หรือ IIS บน target server  
-Backend ถูก bundle เป็น `.exe` เดียว และลงทะเบียนเป็น Windows Service อัตโนมัติ
+ติดตั้งแบบ wizard ไม่ต้องมี Python หรือ IIS บน target server  
+Backend ถูก bundle เป็น `.exe` และลงทะเบียนเป็น Windows Service อัตโนมัติ
 
-**ความต้องการ (บนเครื่อง build เท่านั้น):**
-- Python 3.8+ (เฉพาะเครื่องที่ build)
-- [Inno Setup 6](https://jrsoftware.org/isinfo.php) (เฉพาะเครื่องที่ build)
+**สิ่งที่ต้องมีบนเครื่อง build:**
+- Python 3.8+
+- [Inno Setup 6](https://jrsoftware.org/isinfo.php)
 
-**ขั้นตอน:**
-
-#### ขั้นที่ 1 — Build EXE
-
-รัน `installer\build.bat` บนเครื่อง Windows ที่มี Python:
+#### Build
 
 ```cmd
-installer\build.bat
+windows\installer\build.bat
 ```
 
 สคริปต์จะ:
-1. ติดตั้ง PyInstaller และ dependencies อัตโนมัติ
-2. Bundle `monitor_backend.py` + `index.html` + `cryptography` → `installer\dist\ArcGISMonitor\`
-3. แจ้งให้ไปต่อที่ Inno Setup
+1. ติดตั้ง PyInstaller + cryptography
+2. Bundle `monitor_backend.py` + `index.html` → `windows\installer\dist\ArcGISMonitor\`
+3. เรียก Inno Setup สร้าง installer อัตโนมัติ
 
-#### ขั้นที่ 2 — สร้าง Installer EXE
+ไฟล์ผลลัพธ์: `windows\installer\output\ArcGISMonitor-Setup-1.0.0.exe`
 
-1. เปิด **Inno Setup Compiler**
-2. เปิดไฟล์ `installer\installer.iss`
-3. กด **Build → Compile** (หรือ `Ctrl+F9`)
-4. ไฟล์ installer จะอยู่ที่ `installer\output\ArcGISMonitor-Setup-1.0.0.exe`
+#### ติดตั้งบน Windows Server
 
-#### ขั้นที่ 3 — ติดตั้งบน Windows Server
+1. คัดลอก `ArcGISMonitor-Setup-1.0.0.exe` ไปยัง server
+2. Double-click → เลือก path ที่ต้องการ → Install
+3. Installer จัดการให้อัตโนมัติ:
+   - ติดตั้งไฟล์ไปที่ path ที่เลือก (default: `C:\ArcGISMonitor`)
+   - ลงทะเบียน Windows Service `ArcGISMonitor` (auto-start)
+   - เปิด port 8000 ใน Windows Firewall
+   - Start service และเปิด Dashboard ใน browser
 
-1. คัดลอก `ArcGISMonitor-Setup-1.0.0.exe` ไปยัง target server
-2. Double-click → Next → Install
-3. Installer จะ:
-   - ติดตั้งไฟล์ไปที่ `C:\Program Files\ArcGIS Service Monitor\`
-   - ลงทะเบียนเป็น **Windows Service** (auto-start)
-   - เริ่ม service ทันที
-   - เปิด Dashboard ใน browser
-
-เปิด dashboard: **`http://localhost:8000`**
-
-#### Log Files
-
-```
-C:\Program Files\ArcGIS Service Monitor\logs\app.log
-```
+**Dashboard:** `http://localhost:8000`
 
 #### จัดการ Service
 
 ```cmd
-sc start ArcGISMonitor      # เริ่ม
-sc stop  ArcGISMonitor      # หยุด
-sc query ArcGISMonitor      # ดูสถานะ
+sc start ArcGISMonitor    # เริ่ม
+sc stop  ArcGISMonitor    # หยุด
+sc query ArcGISMonitor    # ดูสถานะ
 ```
+
+**Log:** `<install_path>\logs\app.log`
 
 #### Uninstall
 
-**Control Panel → Programs → ArcGIS Service Monitor → Uninstall**  
-Uninstaller จะหยุดและลบ Windows Service อัตโนมัติ
+Control Panel → Programs → ArcGIS Service Monitor → Uninstall  
+Uninstaller หยุดและลบ Windows Service อัตโนมัติ
 
 ---
 
-### 2. Windows + IIS (On-Premise)
+### 2. Windows — IIS + NSSM
 
-> ใช้แนวทางนี้ถ้าต้องการให้ IIS serve frontend บน port 80/443 และ proxy ไปที่ backend
+สำหรับ server ที่ใช้ IIS อยู่แล้วและต้องการ serve บน port 80/443
 
-สำหรับ server Windows ที่ใช้ IIS อยู่แล้ว
-
-**ความต้องการของระบบ**
+**ความต้องการ:**
 
 | รายการ | เวอร์ชัน |
 |--------|---------|
 | Windows Server | 2016 / 2019 / 2022 |
-| Python | 3.8 ขึ้นไป |
-| IIS | 10 |
-| IIS URL Rewrite Module | 2.1 ขึ้นไป |
-| IIS ARR (Application Request Routing) | 3.0 ขึ้นไป |
-| NSSM | 2.24 ขึ้นไป |
+| Python | 3.8+ |
+| IIS | 10 พร้อม URL Rewrite + ARR |
+| NSSM | 2.24+ |
 
-> Python ใช้ Standard Library เท่านั้น ไม่ต้อง pip install เพิ่มเติม
+> Python ใช้เฉพาะ standard library + `cryptography` — รัน `pip install -r requirements.txt`
 
-#### 1.1 ติดตั้ง Python
-
-ดาวน์โหลดจาก https://python.org/downloads  
-ติดตั้งโดยเลือก **"Add Python to PATH"** จากนั้นตรวจสอบ:
+#### 2.1 ติดตั้ง dependencies
 
 ```cmd
-python --version
+pip install -r requirements.txt
 ```
 
-#### 1.2 วางไฟล์บน Server
+วางไฟล์ `monitor_backend.py`, `index.html`, `windows\web.config` ไปที่ install path เช่น `C:\ArcGISMonitor\`
+
+#### 2.2 ลงทะเบียน Windows Service ด้วย NSSM
 
 ```cmd
-mkdir C:\ArcGISMonitor
-mkdir C:\ArcGISMonitor\logs
-```
-
-คัดลอก `monitor_backend.py`, `index.html`, `web.config` ไปไว้ที่ `C:\ArcGISMonitor\`
-
-#### 1.3 รัน Backend เป็น Windows Service (NSSM)
-
-ดาวน์โหลด NSSM จาก https://nssm.cc/download แล้ววาง `nssm.exe` ที่ `C:\tools\nssm.exe`
-
-เปิด **Command Prompt as Administrator**:
-
-```cmd
-C:\tools\nssm.exe install ArcGISMonitor "C:\Python312\python.exe" "C:\ArcGISMonitor\monitor_backend.py"
-
-C:\tools\nssm.exe set ArcGISMonitor AppDirectory "C:\ArcGISMonitor"
-C:\tools\nssm.exe set ArcGISMonitor AppStdout "C:\ArcGISMonitor\logs\app.log"
-C:\tools\nssm.exe set ArcGISMonitor AppStderr "C:\ArcGISMonitor\logs\app.log"
-C:\tools\nssm.exe set ArcGISMonitor AppRotateFiles 1
-C:\tools\nssm.exe set ArcGISMonitor AppRotateBytes 10485760
-C:\tools\nssm.exe set ArcGISMonitor Start SERVICE_AUTO_START
-C:\tools\nssm.exe set ArcGISMonitor DisplayName "ArcGIS Service Monitor"
-
-C:\tools\nssm.exe start ArcGISMonitor
+nssm install ArcGISMonitor "C:\Python312\python.exe" "C:\ArcGISMonitor\monitor_backend.py"
+nssm set ArcGISMonitor AppDirectory  "C:\ArcGISMonitor"
+nssm set ArcGISMonitor AppStdout     "C:\ArcGISMonitor\logs\app.log"
+nssm set ArcGISMonitor AppStderr     "C:\ArcGISMonitor\logs\app.log"
+nssm set ArcGISMonitor AppRotateFiles 1
+nssm set ArcGISMonitor AppRotateBytes 10485760
+nssm set ArcGISMonitor Start SERVICE_AUTO_START
+nssm start ArcGISMonitor
 ```
 
 > หา path Python ด้วย `where python`
 
-ตรวจสอบ backend ทำงาน:
+ตรวจสอบ: `curl http://127.0.0.1:8000/api/monitor/dashboard`
 
-```cmd
-curl http://127.0.0.1:8000/api/monitor/dashboard
-```
+#### 2.3 ตั้งค่า IIS
 
-**คำสั่งจัดการ Service:**
+1. ติดตั้ง [URL Rewrite](https://www.iis.net/downloads/microsoft/url-rewrite) และ [ARR](https://www.iis.net/downloads/microsoft/application-request-routing)
+2. เปิด ARR Proxy (PowerShell as Administrator):
+   ```powershell
+   & "$env:windir\system32\inetsrv\appcmd.exe" set config -section:system.webServer/proxy /enabled:"True"
+   ```
+3. สร้าง IIS Website ชี้ไปที่ install path, port 80
+4. IIS จะอ่าน `windows\web.config` และ proxy `/api/*` → `http://127.0.0.1:8000` อัตโนมัติ
 
-```cmd
-sc query ArcGISMonitor                        # ดูสถานะ
-C:\tools\nssm.exe stop ArcGISMonitor          # หยุด
-C:\tools\nssm.exe restart ArcGISMonitor       # รีสตาร์ท
-C:\tools\nssm.exe remove ArcGISMonitor confirm  # ลบ
-```
-
-#### 1.4 ตั้งค่า IIS
-
-1. ติดตั้ง **URL Rewrite Module**: https://www.iis.net/downloads/microsoft/url-rewrite  
-2. ติดตั้ง **ARR**: https://www.iis.net/downloads/microsoft/application-request-routing  
-3. เปิด Proxy ใน ARR (PowerShell as Administrator):
-
-```powershell
-& "$env:windir\system32\inetsrv\appcmd.exe" set config `
-  -section:system.webServer/proxy /enabled:"True"
-```
-
-4. เปิด **IIS Manager** → Add Website:
-
-| ฟิลด์ | ค่า |
-|-------|-----|
-| Site name | `ArcGISMonitor` |
-| Physical path | `C:\ArcGISMonitor` |
-| Port | `80` |
-
-5. เปิด browser ที่ `http://localhost/` ควรเห็นหน้า Dashboard
-
-> สำหรับ HTTPS: ติดตั้ง SSL Certificate ใน IIS แล้วเพิ่ม Binding แบบ `https` port 443  
-> ไม่ต้องแก้ไข `web.config` หรือ backend เพิ่มเติม
-
-#### 1.5 เปลี่ยน Port (กรณีจำเป็น)
-
-ตั้ง environment variable `PORT` ก่อนรัน หรือตั้งใน NSSM:
-
-```cmd
-C:\tools\nssm.exe set ArcGISMonitor AppEnvironmentExtra "PORT=9000"
-```
-
-แล้วแก้ `web.config` บรรทัด proxy ให้ตรงกัน:
-
-```xml
-<action type="Rewrite" url="http://127.0.0.1:9000/api/{R:1}" />
-```
-
-จากนั้น restart:
-
-```cmd
-C:\tools\nssm.exe restart ArcGISMonitor
-iisreset
-```
+**Dashboard:** `http://localhost/`
 
 ---
 
-### 3. Docker — Single Container
+### 3. Docker
 
-สำหรับ server ที่มี Docker และต้องการรันด้วยคำสั่งเดียว โดยไม่ใช้ nginx แยก  
-Backend จะ serve `index.html` เองที่ `/` และ `/api/*` ผ่าน port เดียว
-
-**ความต้องการ:** Docker Engine 20.10+
-
-#### Build และรัน
-
-```bash
-docker build -t arcgis-monitor .
-
-docker run -d \
-  --name arcgis-monitor \
-  -p 8000:8000 \
-  -v arcgis-data:/data \
-  --restart unless-stopped \
-  arcgis-monitor
-```
-
-เปิด browser ที่ `http://<server-ip>:8000`
-
-#### คำสั่งจัดการ
-
-```bash
-docker logs -f arcgis-monitor          # ดู logs
-docker restart arcgis-monitor          # รีสตาร์ท
-docker stop arcgis-monitor             # หยุด
-docker rm arcgis-monitor               # ลบ container
-```
-
-#### เปลี่ยน Port
-
-```bash
-docker run -d -p 80:8000 -v arcgis-data:/data --restart unless-stopped arcgis-monitor
-```
-
----
-
-### 4. Docker Compose — Multi-Environment
-
-สถาปัตยกรรมแบบ 2 container: **nginx** (frontend) + **Python** (backend)
-
-```
-Browser → nginx:80
-             ├── GET /       → serve index.html
-             └── GET /api/*  → proxy → backend:8000
-                                          └── /data/config.json (volume)
-```
+สถาปัตยกรรม: **nginx** (port 80) → proxy `/api/` → **Python backend** (port 8000 ภายใน)
 
 **ความต้องการ:** Docker Engine 20.10+ และ Docker Compose v2
 
-#### Config Volume แต่ละ Environment
-
-| Environment | Named Volume | Port |
-|-------------|-------------|------|
-| dev | `arcgis-data` | 8080 (frontend), 8000 (backend) |
-| staging | `arcgis-staging-data` | 8080 |
-| prod | `arcgis-prod-data` | 80 |
-
-แต่ละ environment ใช้ volume แยกกัน ทำให้ config และ alert history ไม่ปนกัน
-
----
-
-#### Development
-
-เหมาะสำหรับทดสอบบน local หรือ dev server  
-- Frontend: `http://localhost:8080`  
-- Backend เปิด port ตรงสำหรับ debug / Postman: `http://localhost:8000`
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
-```
-
-รันแบบ background:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
-```
-
-ดู logs:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f
-```
-
-หยุด:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml down
-```
-
----
-
-#### Staging
-
-เหมาะสำหรับ UAT หรือ pre-production  
-- Frontend: `http://<staging-server>:8080`  
-- Backend ไม่เปิด port ออกนอก (เข้าถึงผ่าน nginx เท่านั้น)  
-- `restart: unless-stopped`
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build
-```
-
-ดู logs:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.staging.yml logs -f
-```
-
-อัปเดต (pull image ใหม่ + recreate):
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build --force-recreate
-```
-
-หยุด:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.staging.yml down
-```
-
----
-
 #### Production
 
-เหมาะสำหรับ production server  
-- Frontend: `http://<server>:80`  
-- `restart: always` — รีสตาร์ทอัตโนมัติเมื่อ container หรือ host รีบูต  
-- Volume `arcgis-prod-data` แยกจาก dev/staging
-
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+cd docker
+docker compose up -d --build
 ```
 
-ดู logs:
+**Dashboard:** `http://<server-ip>`
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f
+docker compose logs -f               # ดู logs
+docker compose pull && docker compose up -d --force-recreate  # อัปเดต
+docker compose down                  # หยุด (volumes ยังอยู่)
+docker compose down -v               # หยุด + ลบ volumes
 ```
 
-อัปเดต:
+#### Demo (มี sample services พร้อมใช้)
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate
+docker build -f docker/Dockerfile.demo -t arcgis-demo .
+docker run -d -p 8000:8000 --name arcgis-demo arcgis-demo
 ```
 
-หยุด (volumes ยังคงอยู่):
+**Dashboard:** `http://localhost:8000`
+
+มี 5 public ESRI services ให้ดูได้เลย, ตรวจสอบทุก 2 นาที
+
+#### Encryption Key (Docker)
+
+Backend สร้าง encryption key อัตโนมัติใน volume ครั้งแรก ไม่ต้องตั้งค่า  
+สำหรับ production ที่ต้องการควบคุม key เอง:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+# สร้าง key
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+
+# ใส่ใน .env
+cp .env.example .env
+# แก้ ENCRYPTION_KEY=<key>
 ```
-
-ลบ volume ด้วย (ข้อมูลหาย):
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml down -v
-```
-
-> **HTTPS บน Production:** วาง reverse proxy เช่น Caddy หรือ Nginx Proxy Manager ด้านหน้า แล้วให้ชี้ไปที่ port 80 ของ container  
-> หรือแก้ `docker-compose.prod.yml` เพิ่ม `443:443` และ mount SSL certificate เข้า nginx
 
 ---
 
-## การตั้งค่าระบบ
+## การตั้งค่า
 
-เข้าไปที่หน้า Dashboard แล้วคลิก **⚙️ Settings** (มุมบนขวา)
+เปิด Dashboard → คลิก **⚙️ Settings**
 
 ### Map Services
 
 | ฟิลด์ | คำอธิบาย |
 |-------|---------|
-| Service Name | ชื่อแสดงผล เช่น `NOSTRA Basemap` |
-| Service URL | URL ของ ArcGIS service เช่น `https://gis.example.com/arcgis/rest/services/MyMap/MapServer` |
+| Service Name | ชื่อแสดงผล |
+| Service URL | URL ของ ArcGIS REST endpoint |
 | Service Type | MapServer / FeatureServer / ImageServer / GeocodeServer |
-| Username | (ถ้า service ต้องการ login) |
-| Password | ระบบ generate ArcGIS Token อัตโนมัติ และ cache ไว้จนหมดอายุ |
+| Username / Password | กรณี service ต้องการ login — ระบบ generate ArcGIS Token อัตโนมัติและเข้ารหัสก่อนเก็บ |
 
-### Email
+### Email Alert
 
 | ฟิลด์ | ตัวอย่าง |
 |-------|---------|
-| SMTP Server | `smtp.gmail.com` หรือ `mail.company.com` |
-| SMTP Port | `587` (TLS) หรือ `465` (SSL) |
-| Email Username | `monitor@company.com` |
-| Email Password | App Password (แนะนำสำหรับ Gmail) |
-| From Email | `monitor@company.com` |
-| Recipients | เพิ่มอีเมลผู้รับแจ้งเตือนได้หลายคน |
+| SMTP Server | `smtp.gmail.com` |
+| SMTP Port | `587` (TLS) / `465` (SSL) |
+| Username | `monitor@company.com` |
+| Password | App Password |
+| Recipients | เพิ่มได้หลายคน |
 
-กดปุ่ม **🧪 ทดสอบส่งอีเมล** เพื่อตรวจสอบก่อนบันทึก
+กด **🧪 ทดสอบส่งอีเมล** เพื่อตรวจสอบก่อนบันทึก
 
-### Monitor Interval
+### Check Interval
 
-ตั้งความถี่การตรวจสอบอัตโนมัติ (ค่าเริ่มต้น: 15 นาที)
-
-| ค่า | เหมาะกับ |
-|-----|---------|
-| 1 นาที | ทดสอบ / critical systems |
-| 5 นาที | production ทั่วไป |
-| 15 นาที | production ที่ไม่ต้องการ load สูง |
-| 30–60 นาที | monitoring เบาๆ |
+ความถี่การตรวจสอบอัตโนมัติ (ค่าเริ่มต้น 15 นาที)  
+เปลี่ยนแล้วมีผลรอบถัดไปทันที ไม่ต้อง restart
 
 ---
 
-## API Endpoints
+## API Reference
 
 | Method | Path | คำอธิบาย |
 |--------|------|---------|
-| GET | `/api/monitor/dashboard` | ข้อมูลทั้งหมด (services, stats, alerts) |
-| POST | `/api/monitor/check` | trigger ตรวจสอบทันที |
-| GET | `/api/monitor/ping` | live ping ทุก service (ไม่บันทึก) |
-| POST | `/api/monitor/add` | เพิ่ม service |
-| POST | `/api/monitor/update` | แก้ไข service |
-| POST | `/api/monitor/delete` | ลบ service |
-| GET | `/api/config/email` | ดู email config |
-| POST | `/api/config/email` | บันทึก email config |
-| POST | `/api/config/email/test` | ทดสอบส่งอีเมล |
-| GET | `/api/config/interval` | ดู check interval |
-| POST | `/api/config/interval` | ตั้ง check interval |
+| `GET` | `/api/monitor/dashboard` | ข้อมูลทั้งหมด (services, stats, alerts) |
+| `POST` | `/api/monitor/check` | trigger ตรวจสอบทันที |
+| `GET` | `/api/monitor/ping` | live ping ทุก service (ไม่บันทึก) |
+| `POST` | `/api/monitor/add` | เพิ่ม service |
+| `POST` | `/api/monitor/update` | แก้ไข service |
+| `POST` | `/api/monitor/delete` | ลบ service |
+| `GET` | `/api/config/email` | ดู email config |
+| `POST` | `/api/config/email` | บันทึก email config |
+| `POST` | `/api/config/email/test` | ทดสอบส่งอีเมล |
+| `GET` | `/api/config/interval` | ดู check interval |
+| `POST` | `/api/config/interval` | ตั้ง check interval |
+
+> Passwords ไม่ถูกส่งกลับจาก API — dashboard response แสดงเป็น `"password": "********"` เสมอ
 
 ---
 
-## แก้ปัญหาเบื้องต้น
+## แก้ปัญหา
 
-### Backend ไม่ start (Windows)
+### Service ไม่ start (Windows)
 
 ```cmd
-type C:\ArcGISMonitor\logs\app.log
-python C:\ArcGISMonitor\monitor_backend.py
+sc query ArcGISMonitor
+type <install_path>\logs\app.log
 ```
 
-### IIS แสดง 502 Bad Gateway
+### IIS 502 Bad Gateway
 
 ```
-สาเหตุ: ARR Proxy ติดต่อ backend ไม่ได้
-แก้ไข:
-  1. ตรวจสอบ service กำลังทำงาน:  sc query ArcGISMonitor
-  2. ทดสอบ backend:               curl http://127.0.0.1:8000/api/monitor/dashboard
-  3. ตรวจสอบ ARR Proxy เปิดอยู่:  %windir%\system32\inetsrv\appcmd list config -section:system.webServer/proxy
+1. ตรวจสอบ service: sc query ArcGISMonitor
+2. ทดสอบ backend: curl http://127.0.0.1:8000/api/monitor/dashboard
+3. ตรวจสอบ ARR Proxy เปิดอยู่
 ```
 
-### IIS แสดง 500.52
-
-```
-สาเหตุ: ยังไม่ได้ติดตั้ง URL Rewrite module
-แก้ไข: ติดตั้งจาก iis.net/downloads/microsoft/url-rewrite
-```
-
-### Docker — nginx แสดง 502 Bad Gateway
+### Docker — nginx 502
 
 ```bash
-# ตรวจสอบ backend container ทำงานอยู่
-docker compose -f docker-compose.yml -f docker-compose.<env>.yml ps
-
-# ดู logs backend
-docker compose -f docker-compose.yml -f docker-compose.<env>.yml logs backend
+docker compose ps
+docker compose logs backend
 ```
 
-### Docker — ข้อมูลหายหลัง docker compose down
-
-```bash
-# ตรวจสอบว่า volume ยังอยู่
-docker volume ls | grep arcgis
-
-# ต้องใช้ down -v ถึงจะลบ volume — ถ้าไม่ได้ใส่ -v ข้อมูลยังอยู่
-```
-
-### Service ขึ้น Offline ทั้งที่ URL ถูกต้อง
+### service ขึ้น Offline ทั้งที่ URL ถูก
 
 ```
-สาเหตุที่เป็นไปได้:
-  1. Username/Password ไม่ถูกต้อง — ดู lastError ใต้ชื่อ service บน Dashboard
-  2. Token endpoint ไม่ใช่ /arcgis/tokens/generateToken
-  3. Firewall ปิดกั้น outbound HTTPS จาก container หรือ server
-  4. SSL Certificate ของ GIS server ไม่ valid
+1. ดู lastError ใต้ชื่อ service บน Dashboard
+2. Username/Password ไม่ถูกต้อง
+3. Firewall ปิดกั้น outbound HTTPS จาก server
+4. SSL certificate ของ GIS server ไม่ valid
 ```
 
-### ทดสอบการติดตั้ง
+### encryption key หาย (Docker)
 
 ```
-✅ เปิดหน้า Dashboard ได้
-✅ GET /api/monitor/dashboard ได้ JSON กลับมา
-✅ Service แสดงสถานะ Online/Offline
-✅ กด "ตรวจสอบเดี๋ยวนี้" แล้ว sparkline อัปเดต
-✅ Settings → Email → ทดสอบส่งอีเมล → สำเร็จ
+สาเหตุ: volume ถูกลบด้วย down -v
+ผลกระทบ: password ที่เข้ารหัสไว้อ่านไม่ได้ — ต้องใส่ password ใหม่ใน Settings
+ป้องกัน: backup /data/encryption.key หรือใช้ ENCRYPTION_KEY env var
 ```

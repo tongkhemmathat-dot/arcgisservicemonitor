@@ -55,7 +55,7 @@ arcgisservicemonitor/
 
 ### 1. Windows — EXE Installer
 
-ติดตั้งแบบ wizard ไม่ต้องมี Python หรือ IIS บน target server  
+ติดตั้งแบบ wizard **ไม่ต้องมี Python, IIS หรือ ARR** บน target server  
 Backend ถูก bundle เป็น `.exe` และลงทะเบียนเป็น Windows Service อัตโนมัติ
 
 **สิ่งที่ต้องมีบนเครื่อง build:**
@@ -78,14 +78,22 @@ windows\installer\build.bat
 #### ติดตั้งบน Windows Server
 
 1. คัดลอก `ArcGISMonitor-Setup-1.0.0.exe` ไปยัง server
-2. Double-click → เลือก path ที่ต้องการ → Install
-3. Installer จัดการให้อัตโนมัติ:
+2. Double-click → เลือก path ที่ต้องการ
+3. **เลือก Port** — wizard จะถามให้เลือก:
+
+| ตัวเลือก | Dashboard URL | ต้องการ IIS/ARR? |
+|----------|---------------|-----------------|
+| **Port 80** | `http://<server>/` | ไม่ต้อง |
+| **Port 8000** | `http://<server>:8000/` | ไม่ต้อง |
+
+4. กด Install — Installer จัดการให้อัตโนมัติ:
    - ติดตั้งไฟล์ไปที่ path ที่เลือก (default: `C:\ArcGISMonitor`)
-   - ลงทะเบียน Windows Service `ArcGISMonitor` (auto-start)
-   - เปิด port 8000 ใน Windows Firewall
+   - ลงทะเบียน Windows Service `ArcGISMonitor` (auto-start) บน port ที่เลือก
+   - เปิด port ที่เลือกใน Windows Firewall
    - Start service และเปิด Dashboard ใน browser
 
-**Dashboard:** `http://localhost:8000`
+> **Port 80** เหมาะสำหรับ production — ไม่ต้องพิมพ์ port ใน URL และไม่ต้องติดตั้ง IIS, ARR, หรือ reverse proxy ใดๆ  
+> หาก server นั้นมี IIS ใช้งาน port 80 อยู่แล้ว ให้เลือก port 8000 แทน
 
 #### จัดการ Service
 
@@ -100,17 +108,17 @@ sc query ArcGISMonitor    # ดูสถานะ
 #### Uninstall
 
 Control Panel → Programs → ArcGIS Service Monitor → Uninstall  
-Uninstaller หยุดและลบ Windows Service อัตโนมัติ
+Uninstaller หยุดและลบ Windows Service + Firewall rule อัตโนมัติ
 
 ---
 
 #### ใช้งานร่วมกับ IIS (HTTPS / Custom Domain)
 
-เหมาะสำหรับกรณีที่ต้องการให้ IIS รับ request บน port 80/443 แล้ว proxy ไปที่ service  
-Backend ยังทำงานบน port 8000 เหมือนเดิม IIS ทำหน้าที่เป็น reverse proxy เท่านั้น
+ใช้เฉพาะกรณีที่ต้องการ HTTPS หรือ custom domain — ไม่บังคับ  
+Backend ทำงานบน port 8000, IIS ทำหน้าที่เป็น reverse proxy รับบน port 443
 
 ```
-ผู้ใช้ → IIS :80 / :443 → ArcGISMonitor.exe :8000
+ผู้ใช้ → IIS :443 (HTTPS) → ArcGISMonitor.exe :8000
 ```
 
 **สิ่งที่ต้องมี:**
@@ -133,8 +141,8 @@ Backend ยังทำงานบน port 8000 เหมือนเดิม 
 |-------|-----|
 | Site name | `ArcGISMonitor` |
 | Physical path | folder เปล่าใดก็ได้ เช่น `C:\inetpub\arcgismonitor` |
-| Port | `80` (หรือ `443` ถ้ามี SSL) |
-| Host name | domain ของ server (ถ้ามี) |
+| Port | `443` (HTTPS) |
+| Host name | domain ของ server |
 
 **3. วาง web.config**
 
@@ -147,12 +155,12 @@ copy windows\web.config.proxy C:\inetpub\arcgismonitor\web.config
 **4. ทดสอบ**
 
 ```cmd
-curl http://localhost/api/monitor/dashboard
+curl https://monitor.example.com/api/monitor/dashboard
 ```
 
-ควรได้ JSON กลับมา — เข้า dashboard ที่ `http://localhost/`
+ควรได้ JSON กลับมา — เข้า dashboard ที่ `https://monitor.example.com/`
 
-**ตั้งค่า HTTPS (ถ้าต้องการ):**
+**ตั้งค่า HTTPS:**
 
 IIS Manager → Sites → ArcGISMonitor → Bindings → Add → Type: `https` → เลือก SSL Certificate  
 ไม่ต้องแก้ไขไฟล์ใดๆ เพิ่มเติม

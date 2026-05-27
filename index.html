@@ -1579,6 +1579,23 @@
             window.addEventListener('click', (event) => {
                 if (event.target === modal) closeSettingsModal();
             });
+
+            // Escape → ปิด modal
+            // Backspace นอก input → ป้องกัน browser navigate back
+            window.addEventListener('keydown', (e) => {
+                const isModalOpen = modal.classList.contains('active');
+                if (e.key === 'Escape' && isModalOpen) {
+                    closeSettingsModal();
+                    return;
+                }
+                if (e.key === 'Backspace' && isModalOpen) {
+                    const tag = document.activeElement?.tagName.toLowerCase();
+                    const editable = document.activeElement?.isContentEditable;
+                    if (tag !== 'input' && tag !== 'textarea' && !editable) {
+                        e.preventDefault();
+                    }
+                }
+            });
         });
     </script>
 </body>

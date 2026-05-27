@@ -2,6 +2,7 @@
 *.bat
 web.config
 config.json
+!config.demo.json
 nginx/
 docker-compose*.yml
 *.tmp

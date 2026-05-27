@@ -1,0 +1,59 @@
+{
+  "arcGISBaseUrl": "https://sampleserver6.arcgisonline.com/arcgis/rest/services",
+  "serverTime": "",
+  "checkIntervalMinutes": 2,
+  "stats": { "online": 0, "offline": 0, "slow": 0, "total": 5 },
+  "services": [
+    {
+      "id": 1,
+      "serviceName": "USA Map",
+      "servicePath": "USA/MapServer",
+      "serviceType": "MapServer",
+      "url": "https://sampleserver6.arcgisonline.com/arcgis/rest/services/USA/MapServer",
+      "username": "", "password": "",
+      "status": "Unknown", "pingMs": null, "pingHistory": [], "lastChecked": null, "lastError": ""
+    },
+    {
+      "id": 2,
+      "serviceName": "Census",
+      "servicePath": "Census/MapServer",
+      "serviceType": "MapServer",
+      "url": "https://sampleserver6.arcgisonline.com/arcgis/rest/services/Census/MapServer",
+      "username": "", "password": "",
+      "status": "Unknown", "pingMs": null, "pingHistory": [], "lastChecked": null, "lastError": ""
+    },
+    {
+      "id": 3,
+      "serviceName": "Wildfire",
+      "servicePath": "Wildfire/FeatureServer",
+      "serviceType": "FeatureServer",
+      "url": "https://sampleserver6.arcgisonline.com/arcgis/rest/services/Wildfire/FeatureServer",
+      "username": "", "password": "",
+      "status": "Unknown", "pingMs": null, "pingHistory": [], "lastChecked": null, "lastError": ""
+    },
+    {
+      "id": 4,
+      "serviceName": "World Street Map",
+      "servicePath": "World_Street_Map/MapServer",
+      "serviceType": "MapServer",
+      "url": "https://services.arcgisonline.com/arcgis/rest/services/World_Street_Map/MapServer",
+      "username": "", "password": "",
+      "status": "Unknown", "pingMs": null, "pingHistory": [], "lastChecked": null, "lastError": ""
+    },
+    {
+      "id": 5,
+      "serviceName": "World Imagery",
+      "servicePath": "World_Imagery/MapServer",
+      "serviceType": "MapServer",
+      "url": "https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer",
+      "username": "", "password": "",
+      "status": "Unknown", "pingMs": null, "pingHistory": [], "lastChecked": null, "lastError": ""
+    }
+  ],
+  "recentAlerts": [],
+  "emailConfig": {
+    "smtpServer": "", "smtpPort": 587,
+    "username": "", "password": "",
+    "fromEmail": "", "recipients": []
+  }
+}

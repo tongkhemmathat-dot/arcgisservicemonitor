@@ -1,6 +1,6 @@
 # ArcGIS Service Monitor
 
-Dashboard สำหรับตรวจสอบสถานะ ArcGIS REST Services แบบ Real-time
+Dashboard สำหรับตรวจสอบสถานะ ArcGIS REST Services แบบ Real-time  
 พร้อมระบบแจ้งเตือนอีเมลเมื่อ service offline หรือ response ช้า
 
 ---
@@ -8,12 +8,13 @@ Dashboard สำหรับตรวจสอบสถานะ ArcGIS REST Ser
 ## สารบัญ
 
 - [โครงสร้างไฟล์](#โครงสร้างไฟล์)
-- [ความต้องการของระบบ](#ความต้องการของระบบ)
-- [การติดตั้ง](#การติดตั้ง)
-  - [1. ติดตั้ง Python](#1-ติดตั้ง-python)
-  - [2. วางไฟล์บน Server](#2-วางไฟล์บน-server)
-  - [3. รัน Backend เป็น Windows Service (NSSM)](#3-รัน-backend-เป็น-windows-service-nssm)
-  - [4. ตั้งค่า IIS](#4-ตั้งค่า-iis)
+- [วิธี Deploy](#วิธี-deploy)
+  - [1. Windows + IIS (On-Premise)](#1-windows--iis-on-premise)
+  - [2. Docker — Single Container](#2-docker--single-container)
+  - [3. Docker Compose — Multi-Environment](#3-docker-compose--multi-environment)
+    - [Development](#development)
+    - [Staging](#staging)
+    - [Production](#production)
 - [การตั้งค่าระบบ](#การตั้งค่าระบบ)
 - [API Endpoints](#api-endpoints)
 - [แก้ปัญหาเบื้องต้น](#แก้ปัญหาเบื้องต้น)
@@ -23,204 +24,346 @@ Dashboard สำหรับตรวจสอบสถานะ ArcGIS REST Ser
 ## โครงสร้างไฟล์
 
 ```
-ArcGISMonitor\
-├── index.html           Dashboard (frontend)
-├── monitor_backend.py   API Server + Monitor Loop (backend)
-├── config.json          ข้อมูล services, settings, alert history
-├── web.config           IIS configuration (Reverse Proxy)
-├── start.bat            รันแบบ Dev / ทดสอบ
-└── logs\
-    └── app.log          Log จาก backend service
+arcgisservicemonitor/
+├── monitor_backend.py        API Server + Monitor Loop (backend)
+├── index.html                Dashboard (frontend)
+├── config.example.json       ตัวอย่าง config
+│
+├── Dockerfile                สำหรับ Docker build (backend)
+├── docker-compose.yml        Base config (ใช้คู่กับ override ด้านล่าง)
+├── docker-compose.dev.yml    Dev overrides
+├── docker-compose.staging.yml  Staging overrides
+├── docker-compose.prod.yml   Production overrides
+├── nginx/
+│   └── default.conf          nginx config (serve frontend + proxy /api/)
+├── .dockerignore
+│
+├── web.config                IIS configuration (สำหรับ deploy แบบ IIS เท่านั้น)
+└── start.bat                 รันแบบ Dev บน Windows
 ```
+
+> `config.json` จะถูกสร้างอัตโนมัติเมื่อรัน backend ครั้งแรก  
+> **อย่า commit `config.json`** เพราะมีข้อมูล credentials
 
 ---
 
-## ความต้องการของระบบ
+## วิธี Deploy
+
+### 1. Windows + IIS (On-Premise)
+
+สำหรับ server Windows ที่ใช้ IIS อยู่แล้ว
+
+**ความต้องการของระบบ**
 
 | รายการ | เวอร์ชัน |
 |--------|---------|
 | Windows Server | 2016 / 2019 / 2022 |
 | Python | 3.8 ขึ้นไป |
-| IIS | 10 (เปิดใช้งาน Web Server role) |
+| IIS | 10 |
 | IIS URL Rewrite Module | 2.1 ขึ้นไป |
 | IIS ARR (Application Request Routing) | 3.0 ขึ้นไป |
 | NSSM | 2.24 ขึ้นไป |
 
-> **หมายเหตุ:** Python ใช้ Standard Library เท่านั้น ไม่ต้องติดตั้ง package เพิ่มเติม
+> Python ใช้ Standard Library เท่านั้น ไม่ต้อง pip install เพิ่มเติม
 
----
+#### 1.1 ติดตั้ง Python
 
-## การติดตั้ง
-
-### 1. ติดตั้ง Python
-
-1. ดาวน์โหลด Python จาก https://python.org/downloads
-2. ติดตั้งโดยเลือก **"Add Python to PATH"**
-3. ตรวจสอบการติดตั้ง:
+ดาวน์โหลดจาก https://python.org/downloads  
+ติดตั้งโดยเลือก **"Add Python to PATH"** จากนั้นตรวจสอบ:
 
 ```cmd
 python --version
 ```
 
----
-
-### 2. วางไฟล์บน Server
-
-สร้างโฟลเดอร์และคัดลอกไฟล์:
+#### 1.2 วางไฟล์บน Server
 
 ```cmd
 mkdir C:\ArcGISMonitor
 mkdir C:\ArcGISMonitor\logs
 ```
 
-คัดลอกไฟล์ทั้งหมดไปไว้ที่ `C:\ArcGISMonitor\`
+คัดลอก `monitor_backend.py`, `index.html`, `web.config` ไปไว้ที่ `C:\ArcGISMonitor\`
 
-> สามารถเปลี่ยน path ได้ตามต้องการ — backend จะสร้าง `config.json` ที่ตำแหน่งเดิมกับ script อัตโนมัติ
+#### 1.3 รัน Backend เป็น Windows Service (NSSM)
 
----
+ดาวน์โหลด NSSM จาก https://nssm.cc/download แล้ววาง `nssm.exe` ที่ `C:\tools\nssm.exe`
 
-### 3. รัน Backend เป็น Windows Service (NSSM)
-
-#### 3.1 ดาวน์โหลด NSSM
-
-ดาวน์โหลดจาก https://nssm.cc/download แล้ววาง `nssm.exe` ไว้ที่ `C:\tools\nssm.exe`
-(หรือ path อื่น แต่ต้องรู้ path ไว้ใช้ในขั้นตอนถัดไป)
-
-#### 3.2 ติดตั้ง Service
-
-เปิด **Command Prompt as Administrator** แล้วรัน:
+เปิด **Command Prompt as Administrator**:
 
 ```cmd
 C:\tools\nssm.exe install ArcGISMonitor "C:\Python312\python.exe" "C:\ArcGISMonitor\monitor_backend.py"
 
 C:\tools\nssm.exe set ArcGISMonitor AppDirectory "C:\ArcGISMonitor"
-
 C:\tools\nssm.exe set ArcGISMonitor AppStdout "C:\ArcGISMonitor\logs\app.log"
 C:\tools\nssm.exe set ArcGISMonitor AppStderr "C:\ArcGISMonitor\logs\app.log"
 C:\tools\nssm.exe set ArcGISMonitor AppRotateFiles 1
 C:\tools\nssm.exe set ArcGISMonitor AppRotateBytes 10485760
-
 C:\tools\nssm.exe set ArcGISMonitor Start SERVICE_AUTO_START
 C:\tools\nssm.exe set ArcGISMonitor DisplayName "ArcGIS Service Monitor"
-C:\tools\nssm.exe set ArcGISMonitor Description "ArcGIS REST Service Health Monitor Backend"
-```
 
-> **หมายเหตุ:** เปลี่ยน `C:\Python312\python.exe` ให้ตรงกับ path Python ที่ติดตั้ง
-> หาได้โดยรัน `where python` ใน Command Prompt
-
-#### 3.3 เริ่ม Service
-
-```cmd
 C:\tools\nssm.exe start ArcGISMonitor
 ```
 
-#### 3.4 คำสั่งจัดการ Service
+> หา path Python ด้วย `where python`
 
-```cmd
-# ดูสถานะ
-sc query ArcGISMonitor
-
-# หยุด / รีสตาร์ท / ลบ
-C:\tools\nssm.exe stop ArcGISMonitor
-C:\tools\nssm.exe restart ArcGISMonitor
-C:\tools\nssm.exe remove ArcGISMonitor confirm
-```
-
-ตรวจสอบว่า backend ทำงานแล้ว:
+ตรวจสอบ backend ทำงาน:
 
 ```cmd
 curl http://127.0.0.1:8000/api/monitor/dashboard
 ```
 
-ต้องได้รับ JSON response กลับมา
+**คำสั่งจัดการ Service:**
 
----
+```cmd
+sc query ArcGISMonitor                        # ดูสถานะ
+C:\tools\nssm.exe stop ArcGISMonitor          # หยุด
+C:\tools\nssm.exe restart ArcGISMonitor       # รีสตาร์ท
+C:\tools\nssm.exe remove ArcGISMonitor confirm  # ลบ
+```
 
-### 4. ตั้งค่า IIS
+#### 1.4 ตั้งค่า IIS
 
-#### 4.1 เปิดใช้งาน IIS (ถ้ายังไม่ได้เปิด)
-
-เปิด **Server Manager** → Add Roles and Features → Web Server (IIS)
-เลือก features ขั้นต่ำ:
-- Web Server → Common HTTP Features → Static Content, Default Document
-- Web Server → Application Development (ไม่จำเป็น)
-
-#### 4.2 ติดตั้ง URL Rewrite Module
-
-ดาวน์โหลดและติดตั้งจาก:
-https://www.iis.net/downloads/microsoft/url-rewrite
-
-#### 4.3 ติดตั้ง ARR (Application Request Routing)
-
-ดาวน์โหลดและติดตั้งจาก:
-https://www.iis.net/downloads/microsoft/application-request-routing
-
-#### 4.4 เปิดใช้งาน Proxy ใน ARR
-
-เปิด **PowerShell as Administrator** แล้วรัน:
+1. ติดตั้ง **URL Rewrite Module**: https://www.iis.net/downloads/microsoft/url-rewrite  
+2. ติดตั้ง **ARR**: https://www.iis.net/downloads/microsoft/application-request-routing  
+3. เปิด Proxy ใน ARR (PowerShell as Administrator):
 
 ```powershell
 & "$env:windir\system32\inetsrv\appcmd.exe" set config `
   -section:system.webServer/proxy /enabled:"True"
 ```
 
-#### 4.5 สร้าง IIS Website
-
-เปิด **IIS Manager**:
-
-1. คลิกขวาที่ **Sites** → **Add Website**
-2. ตั้งค่าดังนี้:
+4. เปิด **IIS Manager** → Add Website:
 
 | ฟิลด์ | ค่า |
 |-------|-----|
 | Site name | `ArcGISMonitor` |
 | Physical path | `C:\ArcGISMonitor` |
-| Binding Type | `http` |
 | Port | `80` |
-| Host name | (ชื่อ domain หรือปล่อยว่าง) |
 
-3. คลิก **OK**
+5. เปิด browser ที่ `http://localhost/` ควรเห็นหน้า Dashboard
 
-#### 4.6 ตรวจสอบ IIS
-
-เปิด browser แล้วเข้า `http://localhost/` หรือ `http://<server-ip>/`
-ควรเห็นหน้า Dashboard
-
-> **ถ้าต้องการ HTTPS:** ติดตั้ง SSL Certificate ใน IIS แล้วเพิ่ม Binding แบบ `https` port 443
+> สำหรับ HTTPS: ติดตั้ง SSL Certificate ใน IIS แล้วเพิ่ม Binding แบบ `https` port 443  
 > ไม่ต้องแก้ไข `web.config` หรือ backend เพิ่มเติม
+
+#### 1.5 เปลี่ยน Port (กรณีจำเป็น)
+
+ตั้ง environment variable `PORT` ก่อนรัน หรือตั้งใน NSSM:
+
+```cmd
+C:\tools\nssm.exe set ArcGISMonitor AppEnvironmentExtra "PORT=9000"
+```
+
+แล้วแก้ `web.config` บรรทัด proxy ให้ตรงกัน:
+
+```xml
+<action type="Rewrite" url="http://127.0.0.1:9000/api/{R:1}" />
+```
+
+จากนั้น restart:
+
+```cmd
+C:\tools\nssm.exe restart ArcGISMonitor
+iisreset
+```
+
+---
+
+### 2. Docker — Single Container
+
+สำหรับ server ที่มี Docker และต้องการรันด้วยคำสั่งเดียว โดยไม่ใช้ nginx แยก  
+Backend จะ serve `index.html` เองที่ `/` และ `/api/*` ผ่าน port เดียว
+
+**ความต้องการ:** Docker Engine 20.10+
+
+#### Build และรัน
+
+```bash
+docker build -t arcgis-monitor .
+
+docker run -d \
+  --name arcgis-monitor \
+  -p 8000:8000 \
+  -v arcgis-data:/data \
+  --restart unless-stopped \
+  arcgis-monitor
+```
+
+เปิด browser ที่ `http://<server-ip>:8000`
+
+#### คำสั่งจัดการ
+
+```bash
+docker logs -f arcgis-monitor          # ดู logs
+docker restart arcgis-monitor          # รีสตาร์ท
+docker stop arcgis-monitor             # หยุด
+docker rm arcgis-monitor               # ลบ container
+```
+
+#### เปลี่ยน Port
+
+```bash
+docker run -d -p 80:8000 -v arcgis-data:/data --restart unless-stopped arcgis-monitor
+```
+
+---
+
+### 3. Docker Compose — Multi-Environment
+
+สถาปัตยกรรมแบบ 2 container: **nginx** (frontend) + **Python** (backend)
+
+```
+Browser → nginx:80
+             ├── GET /       → serve index.html
+             └── GET /api/*  → proxy → backend:8000
+                                          └── /data/config.json (volume)
+```
+
+**ความต้องการ:** Docker Engine 20.10+ และ Docker Compose v2
+
+#### Config Volume แต่ละ Environment
+
+| Environment | Named Volume | Port |
+|-------------|-------------|------|
+| dev | `arcgis-data` | 8080 (frontend), 8000 (backend) |
+| staging | `arcgis-staging-data` | 8080 |
+| prod | `arcgis-prod-data` | 80 |
+
+แต่ละ environment ใช้ volume แยกกัน ทำให้ config และ alert history ไม่ปนกัน
+
+---
+
+#### Development
+
+เหมาะสำหรับทดสอบบน local หรือ dev server  
+- Frontend: `http://localhost:8080`  
+- Backend เปิด port ตรงสำหรับ debug / Postman: `http://localhost:8000`
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
+
+รันแบบ background:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+```
+
+ดู logs:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f
+```
+
+หยุด:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down
+```
+
+---
+
+#### Staging
+
+เหมาะสำหรับ UAT หรือ pre-production  
+- Frontend: `http://<staging-server>:8080`  
+- Backend ไม่เปิด port ออกนอก (เข้าถึงผ่าน nginx เท่านั้น)  
+- `restart: unless-stopped`
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build
+```
+
+ดู logs:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.staging.yml logs -f
+```
+
+อัปเดต (pull image ใหม่ + recreate):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build --force-recreate
+```
+
+หยุด:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.staging.yml down
+```
+
+---
+
+#### Production
+
+เหมาะสำหรับ production server  
+- Frontend: `http://<server>:80`  
+- `restart: always` — รีสตาร์ทอัตโนมัติเมื่อ container หรือ host รีบูต  
+- Volume `arcgis-prod-data` แยกจาก dev/staging
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+ดู logs:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f
+```
+
+อัปเดต:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate
+```
+
+หยุด (volumes ยังคงอยู่):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+```
+
+ลบ volume ด้วย (ข้อมูลหาย):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml down -v
+```
+
+> **HTTPS บน Production:** วาง reverse proxy เช่น Caddy หรือ Nginx Proxy Manager ด้านหน้า แล้วให้ชี้ไปที่ port 80 ของ container  
+> หรือแก้ `docker-compose.prod.yml` เพิ่ม `443:443` และ mount SSL certificate เข้า nginx
 
 ---
 
 ## การตั้งค่าระบบ
 
-เข้าไปที่หน้า Dashboard แล้วคลิก **Settings** (มุมบนขวา)
+เข้าไปที่หน้า Dashboard แล้วคลิก **⚙️ Settings** (มุมบนขวา)
 
 ### Map Services
 
 | ฟิลด์ | คำอธิบาย |
 |-------|---------|
 | Service Name | ชื่อแสดงผล เช่น `NOSTRA Basemap` |
-| Service URL | URL ของ ArcGIS MapServer เช่น `https://gis.example.com/arcgis/rest/services/MyMap/MapServer` |
+| Service URL | URL ของ ArcGIS service เช่น `https://gis.example.com/arcgis/rest/services/MyMap/MapServer` |
 | Service Type | MapServer / FeatureServer / ImageServer / GeocodeServer |
 | Username | (ถ้า service ต้องการ login) |
-| Password | (ถ้า service ต้องการ login) — ระบบจะ generate ArcGIS Token อัตโนมัติ |
+| Password | ระบบ generate ArcGIS Token อัตโนมัติ และ cache ไว้จนหมดอายุ |
 
-### Email (แจ้งเตือนเมื่อ service offline)
+### Email
 
 | ฟิลด์ | ตัวอย่าง |
 |-------|---------|
 | SMTP Server | `smtp.gmail.com` หรือ `mail.company.com` |
 | SMTP Port | `587` (TLS) หรือ `465` (SSL) |
 | Email Username | `monitor@company.com` |
-| Email Password | password หรือ App Password |
+| Email Password | App Password (แนะนำสำหรับ Gmail) |
 | From Email | `monitor@company.com` |
-| Recipients | เพิ่มอีเมลผู้รับแจ้งเตือน |
+| Recipients | เพิ่มอีเมลผู้รับแจ้งเตือนได้หลายคน |
 
-กดปุ่ม **🧪 ทดสอบส่งอีเมล** เพื่อตรวจสอบการตั้งค่าก่อนบันทึก
+กดปุ่ม **🧪 ทดสอบส่งอีเมล** เพื่อตรวจสอบก่อนบันทึก
 
-### Monitor
+### Monitor Interval
 
-ตั้งความถี่การตรวจสอบ (ค่าเริ่มต้น: 15 นาที)
+ตั้งความถี่การตรวจสอบอัตโนมัติ (ค่าเริ่มต้น: 15 นาที)
 
 | ค่า | เหมาะกับ |
 |-----|---------|
@@ -232,8 +375,6 @@ https://www.iis.net/downloads/microsoft/application-request-routing
 ---
 
 ## API Endpoints
-
-Backend ทำงานบน `http://127.0.0.1:8000` (เข้าถึงจากภายในเท่านั้น ผ่าน IIS Proxy)
 
 | Method | Path | คำอธิบาย |
 |--------|------|---------|
@@ -253,13 +394,10 @@ Backend ทำงานบน `http://127.0.0.1:8000` (เข้าถึงจ�
 
 ## แก้ปัญหาเบื้องต้น
 
-### Backend ไม่ start
+### Backend ไม่ start (Windows)
 
 ```cmd
-# ดู log
 type C:\ArcGISMonitor\logs\app.log
-
-# ทดสอบรันตรง
 python C:\ArcGISMonitor\monitor_backend.py
 ```
 
@@ -268,60 +406,52 @@ python C:\ArcGISMonitor\monitor_backend.py
 ```
 สาเหตุ: ARR Proxy ติดต่อ backend ไม่ได้
 แก้ไข:
-  1. ตรวจสอบว่า service ArcGISMonitor กำลังทำงาน
-     sc query ArcGISMonitor
-  2. ทดสอบ backend โดยตรง
-     curl http://127.0.0.1:8000/api/monitor/dashboard
-  3. ตรวจสอบว่าเปิด ARR Proxy แล้ว
-     %windir%\system32\inetsrv\appcmd list config -section:system.webServer/proxy
+  1. ตรวจสอบ service กำลังทำงาน:  sc query ArcGISMonitor
+  2. ทดสอบ backend:               curl http://127.0.0.1:8000/api/monitor/dashboard
+  3. ตรวจสอบ ARR Proxy เปิดอยู่:  %windir%\system32\inetsrv\appcmd list config -section:system.webServer/proxy
 ```
 
-### IIS แสดง 500.52 (URL Rewrite error)
+### IIS แสดง 500.52
 
 ```
 สาเหตุ: ยังไม่ได้ติดตั้ง URL Rewrite module
-แก้ไข: ติดตั้ง URL Rewrite จาก iis.net/downloads/microsoft/url-rewrite
+แก้ไข: ติดตั้งจาก iis.net/downloads/microsoft/url-rewrite
+```
+
+### Docker — nginx แสดง 502 Bad Gateway
+
+```bash
+# ตรวจสอบ backend container ทำงานอยู่
+docker compose -f docker-compose.yml -f docker-compose.<env>.yml ps
+
+# ดู logs backend
+docker compose -f docker-compose.yml -f docker-compose.<env>.yml logs backend
+```
+
+### Docker — ข้อมูลหายหลัง docker compose down
+
+```bash
+# ตรวจสอบว่า volume ยังอยู่
+docker volume ls | grep arcgis
+
+# ต้องใช้ down -v ถึงจะลบ volume — ถ้าไม่ได้ใส่ -v ข้อมูลยังอยู่
 ```
 
 ### Service ขึ้น Offline ทั้งที่ URL ถูกต้อง
 
 ```
 สาเหตุที่เป็นไปได้:
-  1. Username/Password ไม่ถูกต้อง — ดู lastError ใต้ชื่อ service
+  1. Username/Password ไม่ถูกต้อง — ดู lastError ใต้ชื่อ service บน Dashboard
   2. Token endpoint ไม่ใช่ /arcgis/tokens/generateToken
-     (บางระบบใช้ /arcgis/sharing/rest/generateToken)
-  3. Firewall บน server ปิดกั้น outbound HTTPS
+  3. Firewall ปิดกั้น outbound HTTPS จาก container หรือ server
   4. SSL Certificate ของ GIS server ไม่ valid
 ```
 
-### เปลี่ยน port จาก 8000
-
-แก้ไขในไฟล์ `monitor_backend.py` บรรทัดสุดท้าย:
-
-```python
-run_server(host="127.0.0.1", port=9000)  # เปลี่ยนเป็น port ที่ต้องการ
-```
-
-และแก้ `web.config`:
-
-```xml
-<action type="Rewrite" url="http://127.0.0.1:9000/api/{R:1}" />
-```
-
-จากนั้น restart service:
-
-```cmd
-C:\tools\nssm.exe restart ArcGISMonitor
-iisreset
-```
-
----
-
-## ทดสอบการติดตั้ง
+### ทดสอบการติดตั้ง
 
 ```
-✅ http://localhost/                          → เห็นหน้า Dashboard
-✅ http://localhost/api/monitor/dashboard     → ได้ JSON
+✅ เปิดหน้า Dashboard ได้
+✅ GET /api/monitor/dashboard ได้ JSON กลับมา
 ✅ Service แสดงสถานะ Online/Offline
 ✅ กด "ตรวจสอบเดี๋ยวนี้" แล้ว sparkline อัปเดต
 ✅ Settings → Email → ทดสอบส่งอีเมล → สำเร็จ

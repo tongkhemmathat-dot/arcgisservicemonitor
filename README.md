@@ -12,6 +12,9 @@ Dashboard ตรวจสอบสถานะ ArcGIS REST Services แบบ Re
   - [1. Windows — EXE Installer](#1-windows--exe-installer)
   - [2. Windows — IIS + NSSM](#2-windows--iis--nssm)
   - [3. Docker](#3-docker)
+    - [Production](#production)
+    - [ใช้กับ nginx ที่มีอยู่แล้ว](#ใช้กับ-nginx-ที่มีอยู่แล้ว-existing-reverse-proxy)
+    - [Demo](#demo-มี-sample-services-พร้อมใช้)
 - [การตั้งค่า](#การตั้งค่า)
 - [API Reference](#api-reference)
 - [แก้ปัญหา](#แก้ปัญหา)
@@ -234,6 +237,137 @@ docker compose down                  # หยุด (volumes ยังอยู�
 docker compose down -v               # หยุด + ลบ volumes
 ```
 
+#### ใช้กับ nginx ที่มีอยู่แล้ว (Existing Reverse Proxy)
+
+สำหรับกรณีที่มี nginx container ทำหน้าที่เป็น reverse proxy อยู่แล้วในระบบ  
+จะรันเฉพาะ backend container และให้ nginx เดิมจัดการ routing แทน
+
+```
+ผู้ใช้ → nginx (port 80/443) → arcgismonitor-backend:8000
+```
+
+**ขั้นตอน:**
+
+**1. หาชื่อ Docker network ของ nginx ที่มีอยู่**
+
+```bash
+docker inspect <nginx-container-name> --format '{{json .NetworkSettings.Networks}}' | jq 'keys'
+```
+
+**2. สร้าง `docker-compose.custom.yml`** ที่ root ของ project:
+
+```yaml
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: arcgismonitor-backend
+    restart: unless-stopped
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "8000"
+      CONFIG_PATH: "/data/config.json"
+      ENCRYPTION_KEY: "${ENCRYPTION_KEY:-}"
+    volumes:
+      - arcgis-data:/data
+    networks:
+      - proxy        # ← เปลี่ยนเป็นชื่อ network ของ nginx ที่มีอยู่
+
+volumes:
+  arcgis-data:
+
+networks:
+  proxy:
+    external: true   # ← ใช้ network ที่มีอยู่แล้ว ไม่สร้างใหม่
+```
+
+> เปลี่ยน `proxy` ให้ตรงกับชื่อ network จริงของระบบ
+
+**3. เพิ่ม location block ใน nginx config ที่มีอยู่**
+
+กรณี ArcGISMonitor อยู่ที่ **subdomain** เช่น `monitor.yourdomain.com`:
+
+```nginx
+server {
+    listen 80;
+    server_name monitor.yourdomain.com;
+
+    # Serve frontend
+    location / {
+        root  /usr/share/nginx/html/arcgismonitor;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Proxy API → backend container
+    location /api/ {
+        proxy_pass            http://arcgismonitor-backend:8000;
+        proxy_http_version    1.1;
+        proxy_set_header      Host              $host;
+        proxy_set_header      X-Real-IP         $remote_addr;
+        proxy_set_header      X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header      X-Forwarded-Proto $scheme;
+        proxy_read_timeout    30s;
+        proxy_connect_timeout 5s;
+    }
+}
+```
+
+กรณี ArcGISMonitor อยู่ที่ **subpath** เช่น `yourdomain.com/monitor/`:
+
+```nginx
+location /monitor/ {
+    alias /usr/share/nginx/html/arcgismonitor/;
+    index index.html;
+    try_files $uri $uri/ /monitor/index.html;
+}
+
+location /monitor/api/ {
+    rewrite ^/monitor/api/(.*)$ /api/$1 break;
+    proxy_pass            http://arcgismonitor-backend:8000;
+    proxy_http_version    1.1;
+    proxy_set_header      Host              $host;
+    proxy_set_header      X-Real-IP         $remote_addr;
+    proxy_set_header      X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header      X-Forwarded-Proto $scheme;
+    proxy_read_timeout    30s;
+    proxy_connect_timeout 5s;
+}
+```
+
+**4. Mount `index.html` เข้า nginx container ที่มีอยู่**
+
+ใน compose ของ nginx เดิม เพิ่ม volume:
+
+```yaml
+volumes:
+  - /path/to/ArcGISMonitor/index.html:/usr/share/nginx/html/arcgismonitor/index.html:ro
+```
+
+**5. รัน backend และ reload nginx**
+
+```bash
+# รัน backend
+docker compose -f docker-compose.custom.yml up -d --build
+
+# Reload nginx (ไม่ต้อง restart)
+docker exec <nginx-container-name> nginx -s reload
+```
+
+**ทดสอบ:**
+
+```bash
+curl http://<server-ip>/api/monitor/dashboard
+```
+
+ควรได้ JSON กลับมา — เข้า dashboard ที่ `http://<server-ip>/`
+
+> **หมายเหตุ:** ไม่มีการ expose port 8000 ออกนอก Docker network —  
+> nginx ติดต่อ backend ผ่าน Docker internal network เท่านั้น ปลอดภัยกว่าการ bind port
+
+---
+
 #### Demo (มี sample services พร้อมใช้)
 
 ```bash
@@ -343,6 +477,22 @@ REM 3. ตรวจสอบ ARR Proxy เปิดอยู่
 docker compose ps
 docker compose logs backend
 ```
+
+### Docker — nginx 502 (Existing Reverse Proxy)
+
+```bash
+# 1. ตรวจสอบ backend container ทำงานอยู่
+docker ps | grep arcgismonitor-backend
+
+# 2. ตรวจสอบว่า backend อยู่ใน network เดียวกับ nginx
+docker network inspect <network-name> | grep arcgismonitor
+
+# 3. ทดสอบ backend จากภายใน nginx container
+docker exec <nginx-container-name> wget -qO- http://arcgismonitor-backend:8000/api/monitor/dashboard
+```
+
+ถ้าขั้นที่ 3 ล้มเหลว → backend ยังไม่ได้อยู่ใน network เดียวกัน  
+ตรวจสอบ `networks:` ใน `docker-compose.custom.yml` ว่าชื่อตรงกับ network จริง
 
 ### service ขึ้น Offline ทั้งที่ URL ถูก
 

@@ -330,7 +330,11 @@ def _flush_results(updated_map, alerts_to_send):
 
         for i, svc in enumerate(services):
             if svc.get("id") in updated_map:
-                services[i] = updated_map[svc["id"]]
+                result = updated_map[svc["id"]]
+                # Merge only monitoring fields — preserves tags, name, URL, credentials, etc.
+                # that may have been updated concurrently since _check_one captured the dict.
+                for field in ("status", "pingMs", "lastError", "lastChecked", "pingHistory"):
+                    svc[field] = result[field]
 
         stats = {"online": 0, "offline": 0, "slow": 0, "total": len(services)}
         for s in services:

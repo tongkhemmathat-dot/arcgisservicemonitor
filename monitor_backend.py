@@ -9,6 +9,8 @@ import urllib.request
 import urllib.error
 import urllib.parse
 from datetime import datetime, timezone
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 import os
 
@@ -201,7 +203,108 @@ def _smtp_connect(smtp_server, smtp_port, ignore_tls, disable_starttls):
             pass  # server ไม่รองรับ STARTTLS (relay plain mode) — ข้ามได้
     return server
 
-def send_alert_email(subject, message):
+_LEVEL_COLOR = {
+    "Critical": "#c0392b",
+    "Warning":  "#e67e22",
+    "Recovery": "#27ae60",
+}
+_LEVEL_ICON = {
+    "Critical": "&#x274C;",
+    "Warning":  "&#x26A0;&#xFE0F;",
+    "Recovery": "&#x2705;",
+}
+
+def _build_alert_html(level, service_name, service_url, error_detail, ping_ms, stats, timestamp_utc):
+    color = _LEVEL_COLOR.get(level, "#555")
+    icon  = _LEVEL_ICON.get(level, "")
+    ts_local = timestamp_utc.strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    ping_row = ""
+    if ping_ms is not None:
+        ping_row = f"<tr><td style='padding:4px 8px;color:#888;'>Response time</td><td style='padding:4px 8px;'><b>{ping_ms} ms</b></td></tr>"
+
+    error_row = ""
+    if error_detail:
+        error_row = f"<tr><td style='padding:4px 8px;color:#888;'>Error detail</td><td style='padding:4px 8px;color:#c0392b;'>{error_detail}</td></tr>"
+
+    url_row = ""
+    if service_url:
+        safe_url = service_url.split("?")[0]
+        url_row = f"<tr><td style='padding:4px 8px;color:#888;'>Service URL</td><td style='padding:4px 8px;word-break:break-all;'><a href='{safe_url}' style='color:#2980b9;'>{safe_url}</a></td></tr>"
+
+    total   = stats.get("total", 0)
+    online  = stats.get("online", 0)
+    offline = stats.get("offline", 0)
+    slow    = stats.get("slow", 0)
+
+    return f"""<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#f4f4f4;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:24px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.12);">
+
+        <!-- Header -->
+        <tr><td style="background:{color};padding:20px 28px;">
+          <span style="font-size:22px;font-weight:bold;color:#fff;">{icon} ArcGIS Monitor: {level}</span>
+        </td></tr>
+
+        <!-- Service name -->
+        <tr><td style="padding:20px 28px 8px;">
+          <p style="margin:0;font-size:13px;color:#888;text-transform:uppercase;letter-spacing:.5px;">Service</p>
+          <p style="margin:4px 0 0;font-size:20px;font-weight:bold;color:#222;">{service_name}</p>
+        </td></tr>
+
+        <!-- Detail table -->
+        <tr><td style="padding:8px 28px 20px;">
+          <table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:14px;">
+            <tr><td style="padding:4px 8px;color:#888;">Status</td>
+                <td style="padding:4px 8px;"><b style="color:{color};">{level}</b></td></tr>
+            {url_row}
+            {ping_row}
+            {error_row}
+            <tr><td style="padding:4px 8px;color:#888;">Detected at</td>
+                <td style="padding:4px 8px;">{ts_local}</td></tr>
+          </table>
+        </td></tr>
+
+        <!-- Divider -->
+        <tr><td style="padding:0 28px;"><hr style="border:none;border-top:1px solid #eee;"></td></tr>
+
+        <!-- Summary -->
+        <tr><td style="padding:16px 28px 24px;">
+          <p style="margin:0 0 10px;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:.5px;">Overall Status ({total} services)</p>
+          <table cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="padding:0 16px 0 0;text-align:center;">
+                <span style="font-size:22px;font-weight:bold;color:#27ae60;">{online}</span><br>
+                <span style="font-size:11px;color:#888;">Online</span>
+              </td>
+              <td style="padding:0 16px;text-align:center;">
+                <span style="font-size:22px;font-weight:bold;color:#c0392b;">{offline}</span><br>
+                <span style="font-size:11px;color:#888;">Offline</span>
+              </td>
+              <td style="padding:0 16px;text-align:center;">
+                <span style="font-size:22px;font-weight:bold;color:#e67e22;">{slow}</span><br>
+                <span style="font-size:11px;color:#888;">Slow</span>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="background:#f9f9f9;padding:12px 28px;border-top:1px solid #eee;">
+          <span style="font-size:11px;color:#aaa;">Sent by ArcGIS Service Monitor</span>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+
+def send_alert_email(subject, message, service_url="", error_detail="", ping_ms=None, level="", service_name="", stats=None):
     try:
         data = load_config()
         cfg = data.get("emailConfig", {})
@@ -218,21 +321,34 @@ def send_alert_email(subject, message):
             print(f"[EMAIL SKIP] Not configured. Subject: {subject}")
             return False
 
-        msg = (
-            f"From: {from_email}\r\n"
-            f"To: {', '.join(recipients)}\r\n"
-            f"Subject: {subject}\r\n\r\n"
-            f"{message}"
+        now_utc = datetime.now(timezone.utc)
+        html_body = _build_alert_html(
+            level=level or subject,
+            service_name=service_name or message,
+            service_url=service_url,
+            error_detail=error_detail,
+            ping_ms=ping_ms,
+            stats=stats or {},
+            timestamp_utc=now_utc,
         )
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = from_email
+        msg["To"] = ", ".join(recipients)
+        msg.attach(MIMEText(message, "plain", "utf-8"))
+        msg.attach(MIMEText(html_body, "html", "utf-8"))
+
         with _smtp_connect(smtp_server, smtp_port, ignore_tls, disable_starttls) as server:
             if username and password:
                 server.login(username, password)
-            server.sendmail(from_email, recipients, msg.encode("utf-8"))
+            server.sendmail(from_email, recipients, msg.as_bytes())
         print(f"[EMAIL SENT] {subject}")
         return True
     except Exception as e:
         print(f"[EMAIL ERROR] {e}")
         return False
+
 
 def _check_one(service):
     """ตรวจสอบ service เดียว — คืนค่า (updated_service, alert_or_None)"""
@@ -331,15 +447,19 @@ def _check_one(service):
 
     alert = None
     if status != old_status and old_status != "Unknown":
+        svc_name = service.get("serviceName")
         if status == "Offline":
-            alert = {"level": "Critical",  "serviceName": service.get("serviceName"),
-                     "message": f"Service {service.get('serviceName')} went Offline."}
+            alert = {"level": "Critical", "serviceName": svc_name, "serviceUrl": url,
+                     "errorDetail": error_detail, "pingMs": ping_ms,
+                     "message": f"Service {svc_name} went Offline."}
         elif status == "Online" and old_status in ["Offline", "Slow"]:
-            alert = {"level": "Recovery",  "serviceName": service.get("serviceName"),
-                     "message": f"Service {service.get('serviceName')} recovered and is now Online."}
+            alert = {"level": "Recovery", "serviceName": svc_name, "serviceUrl": url,
+                     "errorDetail": "", "pingMs": ping_ms,
+                     "message": f"Service {svc_name} recovered and is now Online."}
         elif status == "Slow":
-            alert = {"level": "Warning",   "serviceName": service.get("serviceName"),
-                     "message": f"Service {service.get('serviceName')} is Slow ({ping_ms}ms)."}
+            alert = {"level": "Warning",  "serviceName": svc_name, "serviceUrl": url,
+                     "errorDetail": error_detail, "pingMs": ping_ms,
+                     "message": f"Service {svc_name} is Slow ({ping_ms}ms)."}
 
     return updated, alert
 
@@ -371,18 +491,90 @@ def _flush_results(updated_map, alerts_to_send):
 
         recent = data.get("recentAlerts", [])
         for alert in alerts_to_send:
-            email_sent = send_alert_email(f"ArcGIS Monitor: {alert['level']}", alert["message"])
+            email_sent = send_alert_email(
+                subject=f"ArcGIS Monitor: {alert['level']}",
+                message=alert["message"],
+                service_url=alert.get("serviceUrl", ""),
+                error_detail=alert.get("errorDetail", ""),
+                ping_ms=alert.get("pingMs"),
+                level=alert["level"],
+                service_name=alert["serviceName"],
+                stats=stats,
+            )
+            telegram_sent = send_telegram_alert(
+                level=alert["level"],
+                service_name=alert["serviceName"],
+                service_url=alert.get("serviceUrl", ""),
+                error_detail=alert.get("errorDetail", ""),
+                ping_ms=alert.get("pingMs"),
+                stats=stats,
+            )
             recent.append({
-                "level":       alert["level"],
-                "timestamp":   datetime.now(timezone.utc).isoformat(),
-                "serviceName": alert["serviceName"],
-                "message":     alert["message"],
-                "emailSent":   email_sent,
+                "level":         alert["level"],
+                "timestamp":     datetime.now(timezone.utc).isoformat(),
+                "serviceName":   alert["serviceName"],
+                "message":       alert["message"],
+                "emailSent":     email_sent,
+                "telegramSent":  telegram_sent,
             })
         data["recentAlerts"] = recent[-20:]
         save_config(data)
     except Exception as e:
         print(f"[FLUSH] Error saving results: {e}")
+
+
+_LEVEL_EMOJI = {
+    "Critical": "\U0001f534",
+    "Warning":  "⚠️",
+    "Recovery": "✅",
+}
+
+def send_telegram_alert(level, service_name, service_url="", error_detail="", ping_ms=None, stats=None):
+    try:
+        data = load_config()
+        cfg = data.get("telegramConfig", {})
+        bot_token = cfg.get("botToken", "")
+        chat_id   = cfg.get("chatId", "")
+        if not bot_token or not chat_id:
+            return False
+
+        emoji = _LEVEL_EMOJI.get(level, "")
+        lines = [
+            f"{emoji} <b>ArcGIS Monitor: {level}</b>",
+            "",
+            f"<b>Service:</b> {service_name}",
+        ]
+        if service_url:
+            safe_url = service_url.split("?")[0]
+            lines.append(f"<b>URL:</b> {safe_url}")
+        if error_detail:
+            lines.append(f"<b>Error:</b> {error_detail}")
+        if ping_ms is not None:
+            lines.append(f"<b>Response time:</b> {ping_ms} ms")
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        lines.append(f"<b>Detected at:</b> {ts}")
+
+        if stats:
+            total   = stats.get("total", 0)
+            online  = stats.get("online", 0)
+            offline = stats.get("offline", 0)
+            slow    = stats.get("slow", 0)
+            lines += ["", f"\U0001f4ca <b>Overall ({total} services):</b> {online} Online | {offline} Offline | {slow} Slow"]
+
+        text = "\n".join(lines)
+        payload = json.dumps({"chat_id": chat_id, "text": text, "parse_mode": "HTML"}).encode("utf-8")
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{bot_token}/sendMessage",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            resp.read()
+        print(f"[TELEGRAM SENT] {level}: {service_name}")
+        return True
+    except Exception as e:
+        print(f"[TELEGRAM ERROR] {e}")
+        return False
 
 
 def check_services(manual_trigger=False):
@@ -407,7 +599,6 @@ def check_services(manual_trigger=False):
             alerts.append(alert)
 
     _flush_results(updated_map, alerts)
-
 
 def monitor_loop():
     """
@@ -543,6 +734,17 @@ class RequestHandler(BaseHTTPRequestHandler):
                 safe.setdefault("ignoreTls", False)
                 safe.setdefault("disableStarttls", False)
                 self._send_json(safe)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+
+        elif self.path == "/api/config/telegram":
+            try:
+                data = load_config()
+                cfg = data.get("telegramConfig", {})
+                self._send_json({
+                    "hasBotToken": bool(cfg.get("botToken")),
+                    "chatId": cfg.get("chatId", ""),
+                })
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
 
@@ -707,6 +909,59 @@ class RequestHandler(BaseHTTPRequestHandler):
                 data["staggerSeconds"] = stagger
                 save_config(data)
                 self._send_json({"success": True, "checkIntervalMinutes": minutes, "staggerSeconds": stagger})
+
+            elif self.path == "/api/config/telegram":
+                payload = self._read_json_body()
+                data = load_config()
+                existing = data.get("telegramConfig", {})
+                cfg = {
+                    "botToken": payload.get("botToken") or existing.get("botToken", ""),
+                    "chatId":   payload.get("chatId",   existing.get("chatId", "")),
+                }
+                data["telegramConfig"] = cfg
+                save_config(data)
+                self._send_json({"success": True})
+
+            elif self.path == "/api/config/telegram/test":
+                payload = self._read_json_body()
+                data = load_config()
+                saved = data.get("telegramConfig", {})
+                bot_token = payload.get("botToken") or saved.get("botToken", "")
+                chat_id   = payload.get("chatId")   or saved.get("chatId", "")
+
+                if not bot_token:
+                    self._send_json({"success": False, "message": "กรุณาระบุ Bot Token"}); return
+                if not chat_id:
+                    self._send_json({"success": False, "message": "กรุณาระบุ Chat ID"}); return
+
+                now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+                text = (
+                    "✅ <b>ArcGIS Monitor — Test Message</b>\n\n"
+                    f"Telegram alerts are configured correctly.\n"
+                    f"<b>Sent at:</b> {now_str}"
+                )
+                tg_payload = json.dumps({"chat_id": chat_id, "text": text, "parse_mode": "HTML"}).encode("utf-8")
+                req = urllib.request.Request(
+                    f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                    data=tg_payload,
+                    headers={"Content-Type": "application/json"},
+                )
+                try:
+                    with urllib.request.urlopen(req, timeout=10) as resp:
+                        result = json.loads(resp.read().decode("utf-8"))
+                    if result.get("ok"):
+                        self._send_json({"success": True, "message": f"ส่งสำเร็จ → Chat ID: {chat_id}"})
+                    else:
+                        self._send_json({"success": False, "message": result.get("description", "Telegram API error")})
+                except urllib.error.HTTPError as e:
+                    body = e.read().decode("utf-8")
+                    try:
+                        detail = json.loads(body).get("description", body)
+                    except Exception:
+                        detail = body
+                    self._send_json({"success": False, "message": f"Telegram API error: {detail}"})
+                except urllib.error.URLError as e:
+                    self._send_json({"success": False, "message": f"Network error: {e.reason}"})
 
             elif self.path == "/api/config/email/test":
                 payload = self._read_json_body()

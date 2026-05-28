@@ -32,5 +32,9 @@
     "password": "",
     "fromEmail": "monitor@example.com",
     "recipients": []
+  },
+  "telegramConfig": {
+    "botToken": "",
+    "chatId": ""
   }
 }

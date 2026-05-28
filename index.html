@@ -837,16 +837,25 @@
         }
 
         .close-btn {
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            font-size: 24px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: #ccc;
+            font-size: 20px;
+            line-height: 1;
             cursor: pointer;
-            padding: 0;
+            width: 34px;
+            height: 34px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s, color 0.15s, border-color 0.15s;
         }
 
         .close-btn:hover {
-            color: var(--neon-yellow);
+            background: rgba(255, 59, 92, 0.18);
+            border-color: var(--neon-red);
+            color: var(--neon-red);
         }
 
         /* Tabs */
@@ -1322,6 +1331,7 @@
             <div class="modal-tabs">
                 <button class="tab-btn active" onclick="switchTab('map-services')">Map Services</button>
                 <button class="tab-btn" onclick="switchTab('email-config')">Email</button>
+                <button class="tab-btn" onclick="switchTab('telegram-config')">Telegram</button>
                 <button class="tab-btn" onclick="switchTab('monitor-settings')">Monitor</button>
             </div>
 
@@ -1493,6 +1503,40 @@
                 </div>
                 <div id="emailTestResult" style="display:none; margin-top:10px; padding:11px 14px; border-radius:6px; border:1px solid; font-family:var(--font-tech); font-size:12px; line-height:1.6;"></div>
 
+            </div>
+
+            <!-- Telegram Configuration Tab -->
+            <div id="telegram-config" class="tab-content">
+                <div>
+                    <h3 style="color: var(--neon-blue); margin-bottom: 6px; font-size: 14px;">Telegram Bot Configuration</h3>
+                    <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 18px; line-height: 1.6;">
+                        สร้าง Bot ผ่าน <b style="color:var(--neon-blue);">@BotFather</b> แล้วนำ Token มากรอก<br>
+                        Chat ID ได้จาก <b style="color:var(--neon-blue);">@userinfobot</b> หรือ Group/Channel ID
+                    </p>
+
+                    <div class="form-group">
+                        <label class="form-label">Bot Token</label>
+                        <input type="password" id="tgBotToken" class="form-input" placeholder="123456789:AAF..." autocomplete="off" />
+                        <div id="tgTokenSavedNote" style="display:none; font-size:11px; color:var(--text-muted); margin-top:4px;">
+                            &#x1f512; Token บันทึกแล้ว — กรอกใหม่เพื่อเปลี่ยน
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Chat ID</label>
+                        <input type="text" id="tgChatId" class="form-input" placeholder="e.g., -1001234567890 หรือ 987654321" />
+                        <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">
+                            Group/Channel: ขึ้นต้นด้วย <code style="color:var(--neon-blue);">-100</code> &nbsp;|&nbsp; Personal chat: ตัวเลขล้วน
+                        </div>
+                    </div>
+
+                    <button class="btn-submit" onclick="saveTelegramConfig()">💾 Save Telegram Configuration</button>
+                    <button class="btn-submit" id="test-telegram-btn" onclick="testTelegramConfig()"
+                            style="background:transparent; color:var(--neon-blue); border:1px solid var(--neon-blue); margin-top:8px;">
+                        🧪 ทดสอบส่งข้อความ
+                    </button>
+                    <div id="telegramTestResult" style="display:none; margin-top:12px; padding:12px 14px; border-radius:6px; border:1px solid; font-family:var(--font-tech); font-size:13px; line-height:1.6;"></div>
+                </div>
             </div>
 
             <!-- Monitor Settings Tab -->
@@ -1952,6 +1996,7 @@
         function loadSettings() {
             loadMapServices();
             loadEmailConfig();
+            loadTelegramConfig();
             loadMonitorSettings();
         }
 
@@ -2296,6 +2341,87 @@
             }
         }
 
+        // --- Telegram Configuration ---
+        async function loadTelegramConfig() {
+            try {
+                const response = await fetch(`${API}/api/config/telegram`);
+                const cfg = await response.json();
+                document.getElementById('tgChatId').value = cfg.chatId || '';
+                const note = document.getElementById('tgTokenSavedNote');
+                if (cfg.hasBotToken) note.style.display = 'block';
+                else note.style.display = 'none';
+            } catch (e) {
+                console.warn('Could not load telegram config:', e);
+            }
+        }
+
+        async function saveTelegramConfig() {
+            const botToken = document.getElementById('tgBotToken').value.trim();
+            const chatId   = document.getElementById('tgChatId').value.trim();
+            if (!chatId) { showToast('กรุณาระบุ Chat ID', 'error'); return; }
+
+            const payload = { chatId };
+            if (botToken) payload.botToken = botToken;
+
+            try {
+                const response = await fetch(`${API}/api/config/telegram`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                if (!result.success) throw new Error(result.error || 'Save failed');
+                showToast('Telegram configuration saved', 'success');
+                document.getElementById('tgBotToken').value = '';
+                document.getElementById('tgTokenSavedNote').style.display = 'block';
+            } catch (e) {
+                showToast('Error: ' + e.message, 'error');
+            }
+        }
+
+        async function testTelegramConfig() {
+            const btn = document.getElementById('test-telegram-btn');
+            const resultBox = document.getElementById('telegramTestResult');
+
+            btn.disabled = true;
+            btn.textContent = '⏳ กำลังทดสอบ...';
+            resultBox.style.display = 'none';
+
+            const payload = { chatId: document.getElementById('tgChatId').value.trim() };
+            const tok = document.getElementById('tgBotToken').value.trim();
+            if (tok) payload.botToken = tok;
+
+            try {
+                const response = await fetch(`${API}/api/config/telegram/test`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                resultBox.style.display = 'block';
+                if (data.success) {
+                    resultBox.style.background  = 'rgba(0,232,122,0.07)';
+                    resultBox.style.borderColor = 'var(--neon-green)';
+                    resultBox.style.color       = 'var(--neon-green)';
+                    resultBox.innerHTML = `&#x2713; ${data.message}`;
+                } else {
+                    resultBox.style.background  = 'rgba(255,59,92,0.07)';
+                    resultBox.style.borderColor = 'var(--neon-red)';
+                    resultBox.style.color       = 'var(--neon-red)';
+                    resultBox.innerHTML = `&#x2717; ${data.message}`;
+                }
+            } catch (e) {
+                resultBox.style.display     = 'block';
+                resultBox.style.background  = 'rgba(255,59,92,0.07)';
+                resultBox.style.borderColor = 'var(--neon-red)';
+                resultBox.style.color       = 'var(--neon-red)';
+                resultBox.innerHTML = '&#x2717; ไม่สามารถเชื่อมต่อ backend ได้';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🧪 ทดสอบส่งข้อความ';
+            }
+        }
+
         // --- Monitor Interval Settings ---
         async function loadMonitorSettings() {
             try {
@@ -2402,9 +2528,6 @@
             setInterval(livePing, 10000);
             setInterval(updateNextCheckDisplay, 1000);
             const modal = document.getElementById('settingsModal');
-            window.addEventListener('click', (event) => {
-                if (event.target === modal) closeSettingsModal();
-            });
 
             // Escape → ปิด modal
             // Backspace นอก input → ป้องกัน browser navigate back

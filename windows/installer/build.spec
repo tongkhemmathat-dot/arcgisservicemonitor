@@ -1,12 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
 # PyInstaller spec — run via build.bat, not directly
+import os
+repo_root = os.path.abspath(os.path.join(SPECPATH, '..', '..'))
 
 a = Analysis(
-    ['../monitor_backend.py'],
-    pathex=['..'],
+    [os.path.join(repo_root, 'monitor_backend.py')],
+    pathex=[repo_root],
     binaries=[],
     datas=[
-        ('../index.html', '.'),
+        (os.path.join(repo_root, 'index.html'), '.'),
     ],
     hiddenimports=[
         'cryptography',

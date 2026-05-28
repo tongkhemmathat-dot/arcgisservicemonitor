@@ -109,13 +109,45 @@ def redact_password(stored: str) -> str:
 _token_cache = {}
 _token_lock = threading.Lock()
 
+def _try_generate_token(token_url, username, password, client, referer=""):
+    """ยิง generateToken request เดียว — คืน (token_str, expires_epoch) หรือ raise Exception"""
+    fields = {
+        "username": username,
+        "password": password,
+        "client": client,
+        "expiration": 60,
+        "f": "json",
+    }
+    if referer:
+        fields["referer"] = referer
+    params = urllib.parse.urlencode(fields).encode("utf-8")
+    req = urllib.request.Request(
+        token_url, data=params,
+        headers={
+            "User-Agent": "ArcGISMonitor/1.0",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Referer": referer or "",
+        }
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        result = json.loads(resp.read().decode("utf-8"))
+
+    if "token" in result:
+        expires = result.get("expires", (time.time() + 3600) * 1000) / 1000
+        return result["token"], expires
+
+    err = result.get("error", {})
+    raise ValueError(err.get("message", f"code {err.get('code', '?')}"))
+
+
 def get_arcgis_token(service_url, username, password, auth_type="server"):
     """Generate and cache an ArcGIS token.
 
     auth_type:
-        "server"  → /arcgis/tokens/generateToken          (ArcGIS Server)
-        "portal"  → /portal/sharing/rest/generateToken    (ArcGIS Enterprise Portal)
-        "online"  → https://www.arcgis.com/sharing/rest/generateToken  (ArcGIS Online)
+        "server"  → /arcgis/tokens/generateToken, client=requestip
+        "portal"  → /portal/sharing/rest/generateToken (fallback: /arcgis/sharing/rest/)
+                    client=referer (required by most Enterprise Portal configs)
+        "online"  → https://www.arcgis.com/sharing/rest/generateToken, client=referer
     """
     if not username or not password:
         return None, None
@@ -123,55 +155,48 @@ def get_arcgis_token(service_url, username, password, auth_type="server"):
     parsed = urllib.parse.urlparse(service_url)
     server_base = f"{parsed.scheme}://{parsed.netloc}"
 
+    # Build ordered list of (url, client, referer) to try in sequence
     if auth_type == "online":
-        token_url = "https://www.arcgis.com/sharing/rest/generateToken"
+        candidates = [
+            ("https://www.arcgis.com/sharing/rest/generateToken", "referer", "https://www.arcgis.com"),
+        ]
     elif auth_type == "portal":
-        token_url = server_base + "/portal/sharing/rest/generateToken"
-    else:  # "server" (default)
-        token_url = server_base + "/arcgis/tokens/generateToken"
+        # Enterprise Portal can be installed at /portal or /arcgis context.
+        # Most require client=referer; fall back to requestip if referer fails.
+        candidates = [
+            (server_base + "/portal/sharing/rest/generateToken", "referer", server_base),
+            (server_base + "/arcgis/sharing/rest/generateToken", "referer", server_base),
+            (server_base + "/portal/sharing/rest/generateToken", "requestip", ""),
+            (server_base + "/arcgis/sharing/rest/generateToken", "requestip", ""),
+        ]
+    else:  # "server"
+        candidates = [
+            (server_base + "/arcgis/tokens/generateToken", "requestip", ""),
+            (server_base + "/arcgis/tokens/generateToken", "referer", server_base),
+        ]
 
-    cache_key = (token_url, username)
-
+    # Check cache using first candidate URL as key
+    cache_key = (candidates[0][0], username)
     with _token_lock:
         cached = _token_cache.get(cache_key)
         if cached:
             token, expires = cached
-            if time.time() < expires - 60:  # still valid (60s buffer)
+            if time.time() < expires - 60:
                 return token, None
 
-    try:
-        params = urllib.parse.urlencode({
-            "username": username,
-            "password": password,
-            "client": "requestip",
-            "expiration": 60,
-            "f": "json"
-        }).encode("utf-8")
-        req = urllib.request.Request(
-            token_url, data=params,
-            headers={
-                "User-Agent": "ArcGISMonitor/1.0",
-                "Content-Type": "application/x-www-form-urlencoded"
-            }
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
-
-        if "token" in result:
-            token = result["token"]
-            expires = result.get("expires", (time.time() + 3600) * 1000) / 1000
+    last_error = "Token generation failed"
+    for token_url, client, referer in candidates:
+        try:
+            token, expires = _try_generate_token(token_url, username, password, client, referer)
             with _token_lock:
                 _token_cache[cache_key] = (token, expires)
-            print(f"[TOKEN OK] {server_base} ({username})")
+            print(f"[TOKEN OK] {token_url} client={client} ({username})")
             return token, None
-        else:
-            err = result.get("error", {})
-            msg = err.get("message", "Token generation failed")
-            print(f"[TOKEN FAIL] {token_url}: {msg}")
-            return None, msg
-    except Exception as e:
-        print(f"[TOKEN ERROR] {token_url}: {e}")
-        return None, str(e)
+        except Exception as e:
+            last_error = str(e)
+            print(f"[TOKEN FAIL] {token_url} client={client}: {last_error}")
+
+    return None, last_error
 
 def load_config():
     with open(CONFIG_PATH, 'r') as f:
@@ -380,25 +405,60 @@ def _check_one(service):
     else:
         try:
             req = urllib.request.Request(check_url, headers={"User-Agent": "ArcGISMonitor/1.0"})
-            with urllib.request.urlopen(req, timeout=5) as response:
-                content = response.read().decode("utf-8")
-                ping_ms = int((time.time() - start_time) * 1000)
+
+            # อ่าน body เสมอ ไม่ว่า HTTP status จะเป็นอะไร
+            # สถานะ Online/Offline ตัดสินจาก JSON content ไม่ใช่ HTTP code
+            http_code = None
+            content   = ""
+            try:
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    http_code = resp.getcode()
+                    content   = resp.read().decode("utf-8", errors="replace")
+            except urllib.error.HTTPError as http_err:
+                http_code = http_err.code
                 try:
-                    json_resp = json.loads(content)
+                    content = http_err.read().decode("utf-8", errors="replace")
+                except Exception:
+                    content = ""
+
+            ping_ms = int((time.time() - start_time) * 1000)
+
+            if not content.strip():
+                status       = "Offline"
+                error_detail = f"HTTP {http_code} — empty response"
+            else:
+                try:
+                    json_resp    = json.loads(content)
+                    has_creds    = bool(service.get("username"))
+
                     if "error" in json_resp:
-                        status       = "Offline"
-                        err          = json_resp["error"]
-                        error_detail = err.get("message", f"Error code {err.get('code', '?')}")
-                    elif ping_ms > 3000:
-                        status = "Slow"
+                        err      = json_resp["error"]
+                        err_code = err.get("code", 0)
+                        err_msg  = err.get("message", f"code {err_code}")
+
+                        if err_code in (499, 498) and not has_creds:
+                            # Service reachable — เพียงแต่ต้องการ token
+                            # ยังไม่ได้ตั้งค่า credentials → นับว่า Online
+                            status       = "Slow" if ping_ms > 3000 else "Online"
+                            error_detail = f"[{err_code}] {err_msg}"
+                        else:
+                            status       = "Offline"
+                            error_detail = f"[{err_code}] {err_msg}"
+
+                    elif "currentVersion" in json_resp or any(
+                        k in json_resp for k in ("layers", "mapName", "serviceDescription",
+                                                  "name", "pixelType", "tables")
+                    ):
+                        # Positive ArcGIS health indicator
+                        status = "Slow" if ping_ms > 3000 else "Online"
                     else:
-                        status = "Online"
+                        # JSON ตอบกลับแต่ไม่มี field ที่รู้จัก — ยังถือว่า Online
+                        status = "Slow" if ping_ms > 3000 else "Online"
+
                 except json.JSONDecodeError:
                     status       = "Offline"
-                    error_detail = "Invalid response (not JSON)"
-        except urllib.error.HTTPError as e:
-            status       = "Offline"
-            error_detail = f"HTTP {e.code} {e.reason}"
+                    error_detail = f"HTTP {http_code} — response is not JSON"
+
         except urllib.error.URLError as e:
             status = "Offline"
             reason = str(e.reason).lower()
@@ -670,21 +730,51 @@ def quick_ping(service):
             check_url += f"&token={token}"
 
     try:
-        start = time.time()
-        req = urllib.request.Request(check_url, headers={"User-Agent": "ArcGISMonitor/1.0"})
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            body = resp.read().decode("utf-8")
-        ping_ms = int((time.time() - start) * 1000)
+        start    = time.time()
+        req      = urllib.request.Request(check_url, headers={"User-Agent": "ArcGISMonitor/1.0"})
+        http_code = None
+        body      = ""
         try:
-            j = json.loads(body)
-            if "error" in j:
-                return {"id": service.get("id"), "pingMs": None, "status": "Offline"}
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                http_code = resp.getcode()
+                body      = resp.read().decode("utf-8", errors="replace")
+        except urllib.error.HTTPError as http_err:
+            http_code = http_err.code
+            try:
+                body = http_err.read().decode("utf-8", errors="replace")
+            except Exception:
+                body = ""
+
+        ping_ms   = int((time.time() - start) * 1000)
+        has_creds = bool(service.get("username"))
+
+        if not body.strip():
+            return {"id": service.get("id"), "pingMs": None, "status": "Offline",
+                    "error": f"HTTP {http_code} — empty response"}
+
+        try:
+            j        = json.loads(body)
+            err_obj  = j.get("error", {})
+            err_code = err_obj.get("code", 0)
+
+            if err_obj:
+                if err_code in (499, 498) and not has_creds:
+                    status = "Slow" if ping_ms > 3000 else "Online"
+                else:
+                    return {"id": service.get("id"), "pingMs": None, "status": "Offline",
+                            "error": f"[{err_code}] {err_obj.get('message', '')}"}
+            else:
+                status = "Slow" if ping_ms > 3000 else "Online"
         except Exception:
-            pass
-        status = "Slow" if ping_ms > 3000 else "Online"
+            status = "Slow" if ping_ms > 3000 else "Online"
+
         return {"id": service.get("id"), "pingMs": ping_ms, "status": status}
-    except Exception:
-        return {"id": service.get("id"), "pingMs": None, "status": "Offline"}
+    except urllib.error.URLError as e:
+        return {"id": service.get("id"), "pingMs": None, "status": "Offline",
+                "error": str(e.reason)}
+    except Exception as e:
+        return {"id": service.get("id"), "pingMs": None, "status": "Offline",
+                "error": str(e)}
 
 
 class RequestHandler(BaseHTTPRequestHandler):

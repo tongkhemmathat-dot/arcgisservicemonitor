@@ -1446,7 +1446,7 @@
                     <span style="font-size:11px; font-weight:600; letter-spacing:0.1em; color:var(--text-muted); font-family:var(--font-tech);">CONFIGURED SERVICES</span>
                     <div style="display:flex; align-items:center; gap:10px;">
                         <span id="svc-count-badge" style="font-family:var(--font-tech); font-size:10px; color:var(--neon-blue); background:rgba(0,200,255,0.08); border:1px solid rgba(0,200,255,0.2); padding:1px 8px; border-radius:10px;"></span>
-                        <button class="btn-add-service" onclick="openAddServiceModal()" style="padding:5px 12px; font-size:12px;">➕ Add Service</button>
+                        <button class="btn-add-service" onclick="openAddServiceModal(true)" style="padding:5px 12px; font-size:12px;">➕ Add Service</button>
                     </div>
                 </div>
                 <div id="servicesList"></div>
@@ -2000,8 +2000,14 @@
         }
 
         // --- Add Service Modal ---
-        function openAddServiceModal() {
+        let _returnToSettings = false;
+
+        function openAddServiceModal(fromSettings = false) {
+            _returnToSettings = fromSettings;
             cancelEditService();
+            if (fromSettings) {
+                document.getElementById('settingsModal').classList.remove('active');
+            }
             document.getElementById('addServiceModal').classList.add('active');
             document.getElementById('mapServiceName').focus();
         }
@@ -2009,6 +2015,10 @@
         function closeAddServiceModal() {
             document.getElementById('addServiceModal').classList.remove('active');
             cancelEditService();
+            if (_returnToSettings) {
+                _returnToSettings = false;
+                document.getElementById('settingsModal').classList.add('active');
+            }
         }
 
         // --- Settings Modal ---
@@ -2203,6 +2213,8 @@
                 document.getElementById('service-submit-btn').textContent = '💾 Update Service';
                 const titleEl = document.getElementById('add-service-modal-title');
                 if (titleEl) titleEl.textContent = '✏️ Edit Service';
+                _returnToSettings = document.getElementById('settingsModal').classList.contains('active');
+                document.getElementById('settingsModal').classList.remove('active');
                 document.getElementById('addServiceModal').classList.add('active');
                 document.getElementById('mapServiceName').focus();
             } catch (e) {

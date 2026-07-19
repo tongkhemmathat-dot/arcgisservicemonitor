@@ -52,7 +52,7 @@ if errorlevel 1 ( echo [ERROR] Inno Setup build failed. & pause & exit /b 1 )
 
 echo.
 echo  Done!
-echo  Output: windows\installer\output\ArcGISMonitor-Setup-1.0.0.exe
+for %%F in (windows\installer\output\ArcGISMonitor-Setup-*.exe) do echo  Output: windows\installer\output\%%~nxF
 echo  Default install path: C:\ArcGISMonitor  (can change during install)
 echo.
 pause

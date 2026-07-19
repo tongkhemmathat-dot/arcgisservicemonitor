@@ -3,7 +3,7 @@
 ; Build EXE first with build.bat before compiling this script.
 
 #define AppName      "ArcGIS Service Monitor"
-#define AppVersion   "1.0.0"
+#define AppVersion   "1.0.1"
 #define AppPublisher "Your Organization"
 #define ServiceName  "ArcGISMonitor"
 #define ServiceExe   "ArcGISMonitor.exe"

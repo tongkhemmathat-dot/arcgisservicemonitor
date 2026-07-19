@@ -20,7 +20,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', 'unittest', 'email', 'html', 'http.client', 'urllib.robotparser'],
+    excludes=['tkinter', 'unittest', 'urllib.robotparser'],
     noarchive=False,
     optimize=1,
 )

@@ -107,7 +107,7 @@ sc query ArcGISMonitor    # ดูสถานะ
 
 #### Upgrade (เมื่อมีเวอร์ชันใหม่)
 
-รัน installer ตัวใหม่ทับของเดิมได้เลย ไม่ต้อง uninstall ก่อน — `AppId` เป็น GUID คงที่ และ `config.json` / `encryption.key` / `logs\` ไม่ได้ถูก bundle เข้า installer จึงไม่ถูกเขียนทับ ข้อมูล service/config เดิมยังอยู่ครบ
+รัน installer ตัวใหม่ทับของเดิมได้เลย ไม่ต้อง uninstall ก่อน — `AppId` เป็น GUID คงที่ และ `config.json` / `encryption.key` / `auth.json` / `logs\` ไม่ได้ถูก bundle เข้า installer จึงไม่ถูกเขียนทับ ข้อมูล service/config/login เดิมยังอยู่ครบ
 
 1. แก้เลขเวอร์ชันใน `windows\installer\installer.iss`:
    ```

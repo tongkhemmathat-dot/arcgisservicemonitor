@@ -180,23 +180,23 @@ def get_arcgis_token(service_url, username, password, auth_type="server"):
     with _token_lock:
         cached = _token_cache.get(cache_key)
         if cached:
-            token, expires = cached
+            token, expires, cached_referer = cached
             if time.time() < expires - 60:
-                return token, None
+                return token, None, cached_referer
 
     last_error = "Token generation failed"
     for token_url, client, referer in candidates:
         try:
             token, expires = _try_generate_token(token_url, username, password, client, referer)
             with _token_lock:
-                _token_cache[cache_key] = (token, expires)
+                _token_cache[cache_key] = (token, expires, referer)
             print(f"[TOKEN OK] {token_url} client={client} ({username})")
-            return token, None
+            return token, None, referer
         except Exception as e:
             last_error = str(e)
             print(f"[TOKEN FAIL] {token_url} client={client}: {last_error}")
 
-    return None, last_error
+    return None, last_error, ""
 
 def load_config():
     with open(CONFIG_PATH, 'r') as f:
@@ -387,10 +387,11 @@ def _check_one(service):
 
     sep       = "&" if "?" in url else "?"
     check_url = url + sep + "f=json"
-    token_error = None
+    token_error  = None
+    token_referer = ""
 
     if username and password:
-        token, token_error = get_arcgis_token(url, username, password, auth_type)
+        token, token_error, token_referer = get_arcgis_token(url, username, password, auth_type)
         if token:
             check_url += f"&token={token}"
 
@@ -404,7 +405,10 @@ def _check_one(service):
         error_detail = f"Token error: {token_error}"
     else:
         try:
-            req = urllib.request.Request(check_url, headers={"User-Agent": "ArcGISMonitor/1.0"})
+            req_headers = {"User-Agent": "ArcGISMonitor/1.0"}
+            if token_referer:
+                req_headers["Referer"] = token_referer
+            req = urllib.request.Request(check_url, headers=req_headers)
 
             # อ่าน body เสมอ ไม่ว่า HTTP status จะเป็นอะไร
             # สถานะ Online/Offline ตัดสินจาก JSON content ไม่ใช่ HTTP code
@@ -723,15 +727,19 @@ def quick_ping(service):
     auth_type = service.get("authType", "server")
     sep = "&" if "?" in url else "?"
     check_url = url + sep + "f=json"
+    token_referer = ""
 
     if username and password:
-        token, _ = get_arcgis_token(url, username, password, auth_type)
+        token, _, token_referer = get_arcgis_token(url, username, password, auth_type)
         if token:
             check_url += f"&token={token}"
 
     try:
         start    = time.time()
-        req      = urllib.request.Request(check_url, headers={"User-Agent": "ArcGISMonitor/1.0"})
+        req_headers = {"User-Agent": "ArcGISMonitor/1.0"}
+        if token_referer:
+            req_headers["Referer"] = token_referer
+        req      = urllib.request.Request(check_url, headers=req_headers)
         http_code = None
         body      = ""
         try:

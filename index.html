@@ -1436,6 +1436,7 @@
                 <button class="tab-btn" onclick="switchTab('email-config')">Email</button>
                 <button class="tab-btn" onclick="switchTab('telegram-config')">Telegram</button>
                 <button class="tab-btn" onclick="switchTab('monitor-settings')">Monitor</button>
+                <button class="tab-btn" onclick="switchTab('login-settings')">Login</button>
             </div>
 
             <!-- Map Services Tab -->
@@ -1609,6 +1610,34 @@
                     </div>
 
                     <button class="btn-submit" onclick="saveMonitorSettings()">💾 บันทึกการตั้งค่า</button>
+                </div>
+            </div>
+
+            <!-- Login Settings Tab -->
+            <div id="login-settings" class="tab-content">
+                <div>
+                    <div class="modal-section-title">Dashboard Login</div>
+                    <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 16px; line-height: 1.6;">
+                        เปลี่ยน username/password สำหรับเข้าหน้า dashboard นี้ — มีผลทันทีหลังบันทึก ครั้งถัดไปที่โหลดหน้าเว็บ browser จะถามรหัสผ่านใหม่
+                    </p>
+
+                    <div id="authEnvNotice" style="display:none; margin-bottom:14px; padding:11px 14px; border-radius:6px; border:1px solid var(--neon-yellow); background:rgba(255,193,7,0.07); color:var(--neon-yellow); font-size:12px; line-height:1.6;">
+                        ⚠️ Login ถูกควบคุมด้วย environment variable (AUTH_USERNAME/AUTH_PASSWORD) อยู่ — เปลี่ยนผ่านหน้านี้ไม่ได้ ต้องแก้ env var แล้ว restart service
+                    </div>
+
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label class="form-label">Username</label>
+                            <input type="text" id="authUsername" class="form-input" autocomplete="off" />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">New Password</label>
+                            <input type="password" id="authPassword" class="form-input" placeholder="อย่างน้อย 8 ตัวอักษร" autocomplete="new-password" />
+                        </div>
+                    </div>
+
+                    <button class="btn-submit" id="save-auth-btn" onclick="saveAuthConfig()">💾 บันทึก Login</button>
+                    <div id="authSaveResult" style="display:none; margin-top:10px; padding:11px 14px; border-radius:6px; border:1px solid; font-family:var(--font-tech); font-size:12px; line-height:1.6;"></div>
                 </div>
             </div>
         </div>
@@ -2044,6 +2073,7 @@
             loadEmailConfig();
             loadTelegramConfig();
             loadMonitorSettings();
+            loadAuthConfig();
         }
 
         // --- Map Services (backend-driven) ---
@@ -2461,6 +2491,61 @@
             } finally {
                 btn.disabled = false;
                 btn.textContent = '🧪 ทดสอบส่งข้อความ';
+            }
+        }
+
+        // --- Login (Basic Auth) Settings ---
+        async function loadAuthConfig() {
+            try {
+                const response = await fetch(`${API}/api/config/auth`);
+                const cfg = await response.json();
+                document.getElementById('authUsername').value = cfg.username || '';
+                document.getElementById('authPassword').value = '';
+                const notice = document.getElementById('authEnvNotice');
+                const btn = document.getElementById('save-auth-btn');
+                notice.style.display = cfg.envControlled ? 'block' : 'none';
+                btn.disabled = !!cfg.envControlled;
+            } catch (e) {
+                console.warn('Could not load auth config:', e);
+            }
+        }
+
+        async function saveAuthConfig() {
+            const resultBox = document.getElementById('authSaveResult');
+            const username = document.getElementById('authUsername').value.trim();
+            const password = document.getElementById('authPassword').value;
+
+            if (!username || password.length < 8) {
+                showToast('กรุณาระบุ username และ password อย่างน้อย 8 ตัวอักษร', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API}/api/config/auth`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const result = await response.json();
+                resultBox.style.display = 'block';
+                if (result.success) {
+                    resultBox.style.background  = 'rgba(0,232,122,0.07)';
+                    resultBox.style.borderColor = 'var(--neon-green)';
+                    resultBox.style.color       = 'var(--neon-green)';
+                    resultBox.innerHTML = '&#x2713; บันทึกแล้ว — เข้าครั้งถัดไปต้อง login ด้วยรหัสผ่านใหม่';
+                    document.getElementById('authPassword').value = '';
+                } else {
+                    resultBox.style.background  = 'rgba(255,59,92,0.07)';
+                    resultBox.style.borderColor = 'var(--neon-red)';
+                    resultBox.style.color       = 'var(--neon-red)';
+                    resultBox.innerHTML = `&#x2717; ${result.error || 'Save failed'}`;
+                }
+            } catch (e) {
+                resultBox.style.display     = 'block';
+                resultBox.style.background  = 'rgba(255,59,92,0.07)';
+                resultBox.style.borderColor = 'var(--neon-red)';
+                resultBox.style.color       = 'var(--neon-red)';
+                resultBox.innerHTML = 'ไม่สามารถเชื่อมต่อ backend ได้';
             }
         }
 

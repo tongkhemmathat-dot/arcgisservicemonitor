@@ -5,6 +5,10 @@ import smtplib
 import ssl
 import re
 import sys
+import base64
+import hmac
+import hashlib
+import secrets
 import urllib.request
 import urllib.error
 import urllib.parse
@@ -102,6 +106,60 @@ def decrypt_password(stored: str) -> str:
 def redact_password(stored: str) -> str:
     """Return masked value for API responses — never expose raw or encrypted bytes."""
     return "********" if stored else ""
+
+# ---------------------------------------------------------------------------
+# Login credentials (HTTP Basic Auth) — gates every API/dashboard request.
+# Priority: AUTH_USERNAME/AUTH_PASSWORD env vars → stored hash → auto-generate
+# ---------------------------------------------------------------------------
+_AUTH_PATH = os.path.join(os.path.dirname(CONFIG_PATH), "auth.json")
+_AUTH_USER = None
+_AUTH_SALT = None
+_AUTH_HASH = None
+
+def _hash_password(password: str, salt: bytes) -> bytes:
+    return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 200_000)
+
+def _env_auth():
+    user = os.environ.get("AUTH_USERNAME", "").strip()
+    pwd  = os.environ.get("AUTH_PASSWORD", "").strip()
+    return (user, pwd) if user and pwd else None
+
+def set_auth(username: str, password: str):
+    global _AUTH_USER, _AUTH_SALT, _AUTH_HASH
+    salt = secrets.token_bytes(16)
+    _AUTH_USER = username
+    _AUTH_SALT = salt
+    _AUTH_HASH = _hash_password(password, salt)
+    with open(_AUTH_PATH, "w") as f:
+        json.dump({"username": username, "salt": salt.hex(), "hash": _AUTH_HASH.hex()}, f)
+
+def _load_or_create_auth():
+    if os.path.exists(_AUTH_PATH):
+        global _AUTH_USER, _AUTH_SALT, _AUTH_HASH
+        with open(_AUTH_PATH, "r") as f:
+            data = json.load(f)
+        _AUTH_USER = data["username"]
+        _AUTH_SALT = bytes.fromhex(data["salt"])
+        _AUTH_HASH = bytes.fromhex(data["hash"])
+        return
+    password = secrets.token_urlsafe(12)
+    set_auth("admin", password)
+    print("=" * 62)
+    print("[AUTH] First run — generated a login for the dashboard:")
+    print("[AUTH]   Username: admin")
+    print(f"[AUTH]   Password: {password}")
+    print("[AUTH] Save this now — change it under Settings > Login after logging in.")
+    print("=" * 62)
+
+_load_or_create_auth()
+
+def verify_auth(username: str, password: str) -> bool:
+    env = _env_auth()
+    if env:
+        return hmac.compare_digest(username, env[0]) and hmac.compare_digest(password, env[1])
+    if not _AUTH_USER or not hmac.compare_digest(username, _AUTH_USER):
+        return False
+    return hmac.compare_digest(_hash_password(password, _AUTH_SALT), _AUTH_HASH)
 
 # ---------------------------------------------------------------------------
 # Token cache: {(token_url, username): (token_str, expires_epoch)}
@@ -807,12 +865,36 @@ class RequestHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         return json.loads(self.rfile.read(length).decode("utf-8"))
 
+    def _require_auth(self) -> bool:
+        header = self.headers.get("Authorization", "")
+        user = pwd = ""
+        if header.startswith("Basic "):
+            try:
+                decoded = base64.b64decode(header[6:]).decode("utf-8")
+                user, _, pwd = decoded.partition(":")
+            except Exception:
+                pass
+        if verify_auth(user, pwd):
+            return True
+        body = json.dumps({"error": "Unauthorized"}).encode("utf-8")
+        self.send_response(401)
+        self.send_header("WWW-Authenticate", 'Basic realm="ArcGIS Service Monitor"')
+        self._send_cors_headers()
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", len(body))
+        self.end_headers()
+        self.wfile.write(body)
+        return False
+
     def do_OPTIONS(self):
         self.send_response(200)
         self._send_cors_headers()
         self.end_headers()
 
     def do_GET(self):
+        if not self._require_auth():
+            return
+
         if self.path == "/api/monitor/dashboard":
             try:
                 data = load_config()
@@ -856,6 +938,12 @@ class RequestHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
 
+        elif self.path == "/api/config/auth":
+            self._send_json({
+                "username": _AUTH_USER,
+                "envControlled": _env_auth() is not None,
+            })
+
         elif self.path == "/api/monitor/ping":
             try:
                 data = load_config()
@@ -897,6 +985,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "Not Found"}, 404)
 
     def do_POST(self):
+        if not self._require_auth():
+            return
         try:
             if self.path == "/api/monitor/check":
                 threading.Thread(target=check_services, args=(True,), daemon=True).start()
@@ -1007,6 +1097,20 @@ class RequestHandler(BaseHTTPRequestHandler):
                 data["staggerSeconds"] = stagger
                 save_config(data)
                 self._send_json({"success": True, "checkIntervalMinutes": minutes, "staggerSeconds": stagger})
+
+            elif self.path == "/api/config/auth":
+                if _env_auth() is not None:
+                    self._send_json({"success": False,
+                                      "error": "Login is controlled by AUTH_USERNAME/AUTH_PASSWORD env vars — change those and restart the service instead."}, 400)
+                    return
+                payload = self._read_json_body()
+                username = payload.get("username", "").strip()
+                password = payload.get("password", "")
+                if not username or len(password) < 8:
+                    self._send_json({"success": False, "error": "Username required, password must be at least 8 characters"}, 400)
+                    return
+                set_auth(username, password)
+                self._send_json({"success": True})
 
             elif self.path == "/api/config/telegram":
                 payload = self._read_json_body()

@@ -105,6 +105,20 @@ sc query ArcGISMonitor    # ดูสถานะ
 
 **Log:** `<install_path>\logs\app.log`
 
+#### Upgrade (เมื่อมีเวอร์ชันใหม่)
+
+รัน installer ตัวใหม่ทับของเดิมได้เลย ไม่ต้อง uninstall ก่อน — `AppId` เป็น GUID คงที่ และ `config.json` / `encryption.key` / `logs\` ไม่ได้ถูก bundle เข้า installer จึงไม่ถูกเขียนทับ ข้อมูล service/config เดิมยังอยู่ครบ
+
+1. แก้เลขเวอร์ชันใน `windows\installer\installer.iss`:
+   ```
+   #define AppVersion   "1.0.1"
+   ```
+2. Build: `windows\installer\build.bat` → ได้ `output\ArcGISMonitor-Setup-1.0.1.exe`
+3. คัดลอกไปที่ server แล้ว double-click รันทับ — installer จะ `sc stop` ก่อนเขียนไฟล์ เขียนทับเฉพาะ `.exe` + `index.html` แล้ว `sc start` ให้อัตโนมัติ
+4. ตรวจสอบ: `sc query ArcGISMonitor` และเปิด dashboard ดูว่า config/service เดิมยังอยู่
+
+ไม่ต้องตั้งค่าใหม่ใน Settings หลังอัปเกรด
+
 #### Uninstall
 
 Control Panel → Programs → ArcGIS Service Monitor → Uninstall  

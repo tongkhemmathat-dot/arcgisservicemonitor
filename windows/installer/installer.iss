@@ -44,6 +44,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Files]
 Source: "dist\ArcGISMonitor\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\..\config.example.json"; DestDir: "{app}"; Flags: ignoreversion
+Source: "nssm.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Dirs]
 Name: "{app}\logs"; Permissions: everyone-full
@@ -53,19 +54,29 @@ Name: "{group}\{#AppName} — Open Dashboard"; Filename: "{app}\open_dashboard.b
 Name: "{group}\{#AppName} — Uninstall";     Filename: "{uninstallexe}"
 
 [Run]
-Filename: "sc.exe"; \
-  Parameters: "create {#ServiceName} binPath= ""{app}\{#ServiceExe} --host 0.0.0.0 --port {code:GetPort}"" start= auto DisplayName= ""{#AppName}"""; \
+; monitor_backend.py is a plain console app (no SCM integration) — "sc.exe create"
+; pointed straight at it fails with error 1053 (never signals SERVICE_RUNNING).
+; NSSM wraps it as a real service instead.
+Filename: "{app}\nssm.exe"; \
+  Parameters: "install {#ServiceName} ""{app}\{#ServiceExe}"" ""--host 0.0.0.0 --port {code:GetPort}"""; \
   Flags: runhidden; StatusMsg: "Registering Windows Service..."
 
-Filename: "sc.exe"; \
-  Parameters: "description {#ServiceName} ""ArcGIS REST Service Health Monitor — http://localhost:{code:GetPort}"""; \
+Filename: "{app}\nssm.exe"; Parameters: "set {#ServiceName} AppDirectory ""{app}"""; Flags: runhidden
+Filename: "{app}\nssm.exe"; Parameters: "set {#ServiceName} DisplayName ""{#AppName}"""; Flags: runhidden
+Filename: "{app}\nssm.exe"; \
+  Parameters: "set {#ServiceName} Description ""ArcGIS REST Service Health Monitor — http://localhost:{code:GetPort}"""; \
   Flags: runhidden
+Filename: "{app}\nssm.exe"; Parameters: "set {#ServiceName} Start SERVICE_AUTO_START"; Flags: runhidden
+Filename: "{app}\nssm.exe"; Parameters: "set {#ServiceName} AppStdout ""{app}\logs\app.log"""; Flags: runhidden
+Filename: "{app}\nssm.exe"; Parameters: "set {#ServiceName} AppStderr ""{app}\logs\app.log"""; Flags: runhidden
+Filename: "{app}\nssm.exe"; Parameters: "set {#ServiceName} AppRotateFiles 1"; Flags: runhidden
+Filename: "{app}\nssm.exe"; Parameters: "set {#ServiceName} AppRotateBytes 10485760"; Flags: runhidden
 
 Filename: "netsh"; \
   Parameters: "advfirewall firewall add rule name=""{#AppName}"" dir=in action=allow protocol=TCP localport={code:GetPort}"; \
   Flags: runhidden; StatusMsg: "Configuring Windows Firewall..."
 
-Filename: "sc.exe"; Parameters: "start {#ServiceName}"; \
+Filename: "{app}\nssm.exe"; Parameters: "start {#ServiceName}"; \
   Flags: runhidden; StatusMsg: "Starting service..."
 
 Filename: "{app}\open_dashboard.bat"; \
@@ -73,8 +84,8 @@ Filename: "{app}\open_dashboard.bat"; \
   Description: "Open Dashboard (http://localhost:{code:GetPort})"
 
 [UninstallRun]
-Filename: "sc.exe"; Parameters: "stop {#ServiceName}";   Flags: runhidden; RunOnceId: "StopSvc"
-Filename: "sc.exe"; Parameters: "delete {#ServiceName}"; Flags: runhidden; RunOnceId: "DelSvc"
+Filename: "{app}\nssm.exe"; Parameters: "stop {#ServiceName}";           Flags: runhidden; RunOnceId: "StopSvc"
+Filename: "{app}\nssm.exe"; Parameters: "remove {#ServiceName} confirm"; Flags: runhidden; RunOnceId: "DelSvc"
 Filename: "netsh"; Parameters: "advfirewall firewall delete rule name=""{#AppName}"" dir=in protocol=TCP localport=80";   Flags: runhidden; RunOnceId: "FwRule80"
 Filename: "netsh"; Parameters: "advfirewall firewall delete rule name=""{#AppName}"" dir=in protocol=TCP localport=8000"; Flags: runhidden; RunOnceId: "FwRule8000"
 

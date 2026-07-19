@@ -34,7 +34,7 @@ if errorlevel 1 ( echo [ERROR] pip install failed. & pause & exit /b 1 )
 
 REM ---- Step 2: Build EXE with PyInstaller ----
 echo [2/4] Building EXE with PyInstaller...
-pyinstaller windows\installer\build.spec ^
+python -m PyInstaller windows\installer\build.spec ^
     --distpath windows\installer\dist ^
     --workpath windows\installer\build ^
     --noconfirm

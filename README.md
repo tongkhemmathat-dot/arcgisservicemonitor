@@ -1,7 +1,9 @@
 # ArcGIS Service Monitor
 
 Dashboard ตรวจสอบสถานะ ArcGIS REST Services แบบ Real-time  
-พร้อมแจ้งเตือนอีเมลเมื่อ service offline หรือตอบสนองช้า
+พร้อมแจ้งเตือนอีเมล/Telegram เมื่อ service offline หรือตอบสนองช้า
+
+> คู่มือผู้ใช้งานฉบับภาษาไทย (สำหรับผู้ใช้ dashboard ทั่วไป): [`ArcGIS_Service_Monitor_คู่มือผู้ใช้งาน.pdf`](./ArcGIS_Service_Monitor_คู่มือผู้ใช้งาน.pdf) — หรือดาวน์โหลดจาก [GitHub Releases](https://github.com/tongkhemmathat-dot/arcgisservicemonitor/releases)
 
 ---
 
@@ -47,7 +49,7 @@ arcgisservicemonitor/
         └── default.conf      nginx — serve frontend + proxy /api/
 ```
 
-> `config.json` และ `encryption.key` สร้างอัตโนมัติเมื่อรันครั้งแรก — **อย่า commit**
+> `config.json`, `encryption.key` และ `auth.json` สร้างอัตโนมัติเมื่อรันครั้งแรก — **อย่า commit**
 
 ---
 
@@ -73,11 +75,11 @@ windows\installer\build.bat
 2. Bundle `monitor_backend.py` + `index.html` → `windows\installer\dist\ArcGISMonitor\`
 3. เรียก Inno Setup สร้าง installer อัตโนมัติ
 
-ไฟล์ผลลัพธ์: `windows\installer\output\ArcGISMonitor-Setup-1.0.0.exe`
+ไฟล์ผลลัพธ์: `windows\installer\output\ArcGISMonitor-Setup-1.0.3.exe`
 
 #### ติดตั้งบน Windows Server
 
-1. คัดลอก `ArcGISMonitor-Setup-1.0.0.exe` ไปยัง server
+1. คัดลอก `ArcGISMonitor-Setup-1.0.3.exe` ไปยัง server
 2. Double-click → เลือก path ที่ต้องการ
 3. **เลือก Port** — wizard จะถามให้เลือก:
 
@@ -442,10 +444,28 @@ cp .env.example .env
 
 กด **🧪 ทดสอบส่งอีเมล** เพื่อตรวจสอบก่อนบันทึก
 
+### Telegram Alert
+
+| ฟิลด์ | คำอธิบาย |
+|-------|---------|
+| Bot Token | สร้างผ่าน [@BotFather](https://t.me/BotFather) ใน Telegram |
+| Chat ID | แชทส่วนตัวหาได้จาก [@userinfobot](https://t.me/userinfobot) · กลุ่ม/ช่องขึ้นต้นด้วย `-100` |
+
+กด **🧪 ทดสอบส่งข้อความ** เพื่อตรวจสอบก่อนบันทึก
+
 ### Check Interval
 
-ความถี่การตรวจสอบอัตโนมัติ (ค่าเริ่มต้น 15 นาที)  
+ความถี่การตรวจสอบอัตโนมัติ (ค่าเริ่มต้น 15 นาที) และ stagger delay (หน่วงเวลาระหว่าง service แต่ละตัวเพื่อกระจาย network load)  
 เปลี่ยนแล้วมีผลรอบถัดไปทันที ไม่ต้อง restart
+
+### Login
+
+Dashboard ทุกหน้า/ทุก API endpoint ถูกล็อกด้วย HTTP Basic Auth
+
+- **รันครั้งแรก:** ระบบสุ่ม username `admin` + password อัตโนมัติ แล้วพิมพ์ออกทาง console/log (`<install_path>\logs\app.log` บน Windows) — เก็บรหัสผ่านนี้ไว้แล้วเข้าไปเปลี่ยนที่ **Settings → Login** ทันที
+- **เปลี่ยนรหัสผ่าน:** Settings → Login → กรอก username/password ใหม่ (อย่างน้อย 8 ตัวอักษร) → มีผลทันที ครั้งถัดไปที่โหลดหน้าเว็บ browser จะถาม login ใหม่
+- **บังคับ credential ระดับ deployment:** ตั้ง environment variable `AUTH_USERNAME` และ `AUTH_PASSWORD` ก่อนสตาร์ท backend — เมื่อตั้งแล้วจะ override ค่าที่บันทึกไว้ใน `auth.json` เสมอ และปิดการเปลี่ยนรหัสผ่านผ่านหน้าเว็บ (ต้องแก้ env var + restart service แทน)
+- `auth.json` เก็บ username + password hash (PBKDF2) ไว้ที่ install path เดียวกับ `config.json` — **อย่า commit**
 
 ---
 
@@ -462,8 +482,15 @@ cp .env.example .env
 | `GET` | `/api/config/email` | ดู email config |
 | `POST` | `/api/config/email` | บันทึก email config |
 | `POST` | `/api/config/email/test` | ทดสอบส่งอีเมล |
-| `GET` | `/api/config/interval` | ดู check interval |
-| `POST` | `/api/config/interval` | ตั้ง check interval |
+| `GET` | `/api/config/telegram` | ดู Telegram config |
+| `POST` | `/api/config/telegram` | บันทึก Telegram config |
+| `POST` | `/api/config/telegram/test` | ทดสอบส่งข้อความ Telegram |
+| `GET` | `/api/config/interval` | ดู check interval / stagger delay |
+| `POST` | `/api/config/interval` | ตั้ง check interval / stagger delay |
+| `GET` | `/api/config/auth` | ดู login username (ไม่คืน password) + สถานะ env override |
+| `POST` | `/api/config/auth` | เปลี่ยน login username/password |
+
+> ทุก endpoint ด้านบนต้องแนบ HTTP Basic Auth header — ไม่มี auth จะได้ `401 Unauthorized`
 
 > Passwords ไม่ถูกส่งกลับจาก API — dashboard response แสดงเป็น `"password": "********"` เสมอ
 
@@ -531,4 +558,14 @@ docker exec <nginx-container-name> wget -qO- http://arcgismonitor-backend:8000/a
 สาเหตุ: volume ถูกลบด้วย down -v
 ผลกระทบ: password ที่เข้ารหัสไว้อ่านไม่ได้ — ต้องใส่ password ใหม่ใน Settings
 ป้องกัน: backup /data/encryption.key หรือใช้ ENCRYPTION_KEY env var
+```
+
+### ลืม login เข้า Dashboard
+
+หน้าเว็บไม่มีทาง reset รหัสผ่านด้วยตัวเอง ต้องแก้จากฝั่งเซิร์ฟเวอร์:
+
+```
+1. ถ้าใช้ AUTH_USERNAME/AUTH_PASSWORD env var → แก้ค่าใน env var แล้ว restart service
+2. ถ้าไม่ได้ตั้ง env var → ลบไฟล์ auth.json ที่ install path แล้ว restart service
+   ระบบจะสุ่ม username "admin" + password ใหม่ให้อัตโนมัติ (ดูได้จาก logs\app.log)
 ```

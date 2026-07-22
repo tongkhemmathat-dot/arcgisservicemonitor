@@ -75,11 +75,11 @@ windows\installer\build.bat
 2. Bundle `monitor_backend.py` + `index.html` → `windows\installer\dist\ArcGISMonitor\`
 3. เรียก Inno Setup สร้าง installer อัตโนมัติ
 
-ไฟล์ผลลัพธ์: `windows\installer\output\ArcGISMonitor-Setup-1.0.3.exe`
+ไฟล์ผลลัพธ์: `windows\installer\output\ArcGISMonitor-Setup-1.0.4.exe`
 
 #### ติดตั้งบน Windows Server
 
-1. คัดลอก `ArcGISMonitor-Setup-1.0.3.exe` ไปยัง server
+1. คัดลอก `ArcGISMonitor-Setup-1.0.4.exe` ไปยัง server
 2. Double-click → เลือก path ที่ต้องการ
 3. **เลือก Port** — wizard จะถามให้เลือก:
 
@@ -105,7 +105,7 @@ sc stop  ArcGISMonitor    # หยุด
 sc query ArcGISMonitor    # ดูสถานะ
 ```
 
-**Log:** `<install_path>\logs\app.log`
+**Log:** `<install_path>\logs\app.log` — หมุนไฟล์ทุกเที่ยงคืน (ไฟล์เก่าถูกเก็บเป็น `app.log.YYYY-MM-DD`) เก็บย้อนหลัง 30 วัน ไฟล์ที่เก่ากว่านั้นถูกลบอัตโนมัติ
 
 #### Upgrade (เมื่อมีเวอร์ชันใหม่)
 

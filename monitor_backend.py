@@ -12,6 +12,8 @@ import secrets
 import urllib.request
 import urllib.error
 import urllib.parse
+import logging
+from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -24,10 +26,42 @@ import os
 if getattr(sys, 'frozen', False):
     _BASE_DIR = os.path.dirname(sys.executable)
     _BUNDLE_DIR = sys._MEIPASS
-    # Redirect output to log file — Windows Service has no console
+    # Redirect output to log file — Windows Service has no console.
+    # Rotates daily at midnight; keeps 30 days of history (app.log.YYYY-MM-DD), older ones deleted.
     _log_dir = os.path.join(_BASE_DIR, "logs")
     os.makedirs(_log_dir, exist_ok=True)
-    _log_file = open(os.path.join(_log_dir, "app.log"), "a", encoding="utf-8", buffering=1)
+
+    class _RotatingStdout:
+        """File-like wrapper around TimedRotatingFileHandler so print()/tracebacks
+        can redirect through it while getting daily rotation + retention."""
+
+        def __init__(self, handler):
+            self._handler = handler
+
+        def write(self, message):
+            self._handler.acquire()
+            try:
+                if self._handler.shouldRollover(None):
+                    self._handler.doRollover()
+                self._handler.stream.write(message)
+                self._handler.stream.flush()
+            finally:
+                self._handler.release()
+
+        def flush(self):
+            self._handler.acquire()
+            try:
+                self._handler.stream.flush()
+            finally:
+                self._handler.release()
+
+    _log_handler = TimedRotatingFileHandler(
+        os.path.join(_log_dir, "app.log"),
+        when="midnight",
+        backupCount=30,
+        encoding="utf-8",
+    )
+    _log_file = _RotatingStdout(_log_handler)
     sys.stdout = _log_file
     sys.stderr = _log_file
 else:
